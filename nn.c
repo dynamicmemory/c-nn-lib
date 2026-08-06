@@ -2,57 +2,31 @@
 #include <stdio.h>
 #include <math.h>
 
-// Linear transformer
-double linear_transform(double weights[], double x[], double bias, int size);
+#define INPUT 5
+#define HIDDEN 3
+
+typedef struct { 
+    int neurons;
+    int *bias;
+    int *activations;
+    int *w;
+} layer;
 
 // Activation functions
-double sigmoid(double z);
 double relu(double z);
+double sigmoid(double z);
 double softmax();
 
 // Loss functions 
 double mse();
 double binary_cross_entropy(double t, double y, int size);
+double categorical_cross_entropy();
 
 // Optimizers 
 double sgd();
 double adam();
 
-// typedef struct {
-//     int neurons;
-//     double activation;
-//     double z[];
-//     double y[];
-// } denselayer;
 
-// TODO: Add bias terms
-// n - number of neurons, f - activation function, size - number of features,  
-// z - preactivation, y - activations, w - weights, x - data, 
-void layer(int neurons, double (*activation)(double a), int size, 
-           double weights[][size], double x[], double y[], double z[]) {
-
-    // Store the preactivation values
-    // For each neuron
-    for (int i=0; i<neurons; ++i) {
-        // For each datapoint
-        for (int j=0; j<size; ++j) {
-            z[i] += weights[i][j] * x[j];
-        }
-    }
-
-    // perform activation and store values
-    for (int i=0; i<neurons; ++i) 
-        y[i] = activation(z[i]);
-}
-
-double linear_transform(double w[], double x[], double bias, int size) {
-    double output = 0.0;
-    
-    for (int i=0; i<size; ++i)
-        output += w[i] * x[i];
-    
-    return output + bias;
-}
 
 // Activation functions
 double sigmoid(double z) {
@@ -60,9 +34,8 @@ double sigmoid(double z) {
 }
 
 double relu(double z) {
-    return z <= 0 ? 0 : 1;
+    return z <= 0 ? 0 : z;
 }
-
 
 // Cost/Loss functions / Objective function / Util function
 double binary_cross_entropy(double t, double y, int size) {
@@ -80,24 +53,23 @@ void backprop(double w[], double x[], double y, double t, int size, double lr, d
 }
 
 int main(void) {
-    // TODO: Construct a network obj 
-    // TODO: network obj contains layers (input, hidden, output)
-    // TODO: layers allow neuron number and activation function 
-    // TODO: Put it all together and thats a basic multilayered nn, refine from there
-
     // Test problem, 5 features, input layer
     double x[3][5] = { 
         {1,  2, 4, 2, 1},
         {10, 9, 5, 9, 10},
         {6,  5, 5, 5, 6}
     };
-    double labs[] = {0, 1, 1};
+    double labels[] = {0, 1, 1};
 
-    int hidden_neurons = 3;
-    double input_weights[] = {0.001, 0.008, 0.002, 0.005, 0.07};
-    double hidden_weights[] = {0.008, 0.005, 0.07};
+    // Hard code weights and bias for input layer 
+    double w1[INPUT] = {0.001, 0.008, 0.002, 0.005, 0.07};
 
-    double bias = 0.00009;
+    // Hard code hidden layer weights and bias
+    double w2[HIDDEN] = {0.008, 0.005, 0.07};
+    double b2[HIDDEN] = {0.009, 0.008, 0.007};
+
+    double b3 = 0.001;
+
     double lr = 0.01;
 
     double z[3] = {0.0};
@@ -106,51 +78,33 @@ int main(void) {
     
     int counter = 1;
     int stopping = 50;
-    while (counter < stopping) {
-        printf("Training epoch %d\n", counter);
-        for (int i=0; i<3; ++i) {
-            // Forward pass
-            z[i] = linear_transform(input_weights, x[i], bias, 5);
-            y[i] = sigmoid(z[i]);
-            loss[i] = binary_cross_entropy(labs[i], y[i], 5);
+    int epochs = 3;
+    while (counter < epochs) {
 
-            // Back prop
-            backprop(input_weights, x[i], y[i], labs[i], 5, lr, &bias);
-        
-            // Eval
-            printf("  Row: %d Linear_transform: %.4lf | Sigmoid: %.4lf"
-                       "| Error: %.4lf\n", i, z[i], y[i], loss[i]);
-        }
-        printf("-----------------------------------------------------------------\n");
-
-        // Check it classifies the training data correctly
-        if (counter == stopping - 1) {
-            for (int i = 0; i < 3; i++)
-            {
-                double a = linear_transform(input_weights, x[i], bias, 5);
-                double p = sigmoid(a);
-
-                printf("Target=%g Prediction=%f\n", labs[i], p);
-            }
-
-            // try some predictions
-            double new_data[] = {2, 3, 4, 3, 2};
-            double a = linear_transform(input_weights, new_data, bias, 5); 
-            double pred = sigmoid(a);
-            printf("Target: 0, Pred: %lf\n", pred);
-
-            double new_data2[] = {5, 5, 5, 5, 5};
-            a = linear_transform(input_weights, new_data2, bias, 5); 
-            pred = sigmoid(a);
-            printf("Target: 1, Pred: %lf\n", pred);
-
-            double new_data3[] = {6, 5, 1, 5, 6};
-            a = linear_transform(input_weights, new_data3, bias, 5); 
-            pred = sigmoid(a);
-            printf("Target: 1, Pred: %lf\n", pred);
-        }
-        counter++;
     }
-
     return 0;
 }
+
+// Activity function
+// TODO: Add bias terms
+// n - number of neurons, f - activation function, size - number of features,  
+// z - preactivation, y - activations, w - weights, x - data, 
+void forward(int neurons, double (*activation)(double a), int input_size, 
+           double w[][input_size], double x[], double y[], double z[]) {
+
+    // Store the preactivation values for backprop
+    // For each neuron
+    for (int i=0; i<neurons; ++i) {
+        // For each input (feature or neuron from prior layer)
+        for (int j=0; j<input_size; ++j) {
+            z[i] += w[i][j] * x[j];
+        }
+    }
+
+    // Perform activation and store values
+    for (int i=0; i<neurons; ++i) 
+        y[i] = activation(z[i]);
+}
+
+
+
