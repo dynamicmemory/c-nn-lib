@@ -54,6 +54,25 @@ void backprop(double w[], double x[], double y, double t, int size, double lr, d
     *bias -= lr * error;
 }
 
+// Extremely verbose forward pass while i figure structure out
+void forward(int rows, int neurons, int input_size, 
+        double linear_combination[rows][neurons], double weights[neurons][input_size], 
+        double inputs[rows][input_size], double activations[rows][neurons], 
+        double bias[neurons], double(*func)(double a)) {
+    
+    for (int row=0; row<rows; ++row)
+
+        for (int neuron=0; neuron<neurons; ++neuron) {
+            linear_combination[row][neuron] = bias[neuron];
+
+            for (int input=0; input<input_size; ++input)
+                linear_combination[row][neuron] += weights[neuron][input] * inputs[row][input];
+
+            // activations[row][neuron] = 1/(1+exp(-linear_combination[row][neuron]));
+            activations[row][neuron] = func(linear_combination[row][neuron]);
+        }
+}
+
 int main(void) {
     // Test problem, 5 features, input layer
     double X[3][5] = { 
@@ -62,7 +81,8 @@ int main(void) {
         {6,  5, 5, 5, 6}
     };
     double labels[] = {0, 1, 1};
-    
+
+    // FORWARD PASS
     // Hard code weights and bias for input layer 
     double W1[HIDDEN_NEURONS][INPUT_FEATURES] = {{0.001, 0.008, 0.002, 0.005, 0.07},
                                 {0.001, 0.002, 0.003, 0.004, 0.006},
@@ -77,91 +97,68 @@ int main(void) {
     double a2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
     double b2[OUTPUT_NEURONS] = {0.08};
 
-    // Batch foreward pass input layer into first hidden layer 1
-    for (int row=0; row < DATA_ROWS; ++row) {
-
-        for (int i=0; i<HIDDEN_NEURONS; ++i) {
-
-            z1[row][i] = b1[i];
-
-            for (int j=0; j<INPUT_FEATURES; ++j) {
-
-                z1[row][i] += W1[i][j] * X[row][j];
-            }
-            
-            a1[row][i] = 1 / (1 + exp(-z1[row][i]));       // sigmoid, try relu soon
-        }
-    }
-
-    // Batch forward pass hidden layer 1 into output layer
-    for (int row=0; row < DATA_ROWS; ++row) {
-
-        for (int i=0; i<OUTPUT_NEURONS; ++i) {
-
-            z2[row][i] = b2[i];
-
-            for (int j=0; j<HIDDEN_NEURONS; ++j) {
-
-                z2[row][i] += W2[i][j] * a1[row][j];
-            }
-
-        a2[row][i] = 1 / (1 + exp(-z2[row][i]));           // sigmoid
-
-        }
-    }
-
-    // Print the hidden activations for the layers
-    for (int i=0; i<DATA_ROWS; ++i) {
-        printf("a1 row%d ", i);
-        for (int j=0; j<HIDDEN_NEURONS; ++j) {
-            printf("%lf ", a1[i][j]);
-        }
-        printf("\n");
-    }
-    for (int i=0; i<DATA_ROWS; ++i) {
-        printf("a2 row%d ", i);
-        for (int j=0; j<OUTPUT_NEURONS; ++j) {
-        printf("%lf ", a2[i][j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
+    forward(DATA_ROWS, HIDDEN_NEURONS, INPUT_FEATURES, z1, W1, X, a1, b1, relu); 
+    forward(DATA_ROWS, OUTPUT_NEURONS, HIDDEN_NEURONS, z2, W2, a1, a2, b2, sigmoid); 
 
     double lr = 0.01;
 
-    double z[3] = {0.0};
-    double y[3] = {0.0};
-    double loss[3] = {0.0};
-    
-    int counter = 1;
-    int stopping = 50;
-    int epochs = 3;
-    // while (counter < epochs) {
-    //
-    // }
+    double dW1[HIDDEN_NEURONS][INPUT_FEATURES] = {{0.0}};
+    double db1[HIDDEN_NEURONS] = {0.01};
+
+    double dW2[OUTPUT_NEURONS][HIDDEN_NEURONS] = {{0.0}};
+    double db2[OUTPUT_NEURONS] = {0.01};
+
+    // And now we do loss and backprop....
+
     return 0;
 }
-
-// Activity function
-// TODO: Add bias terms
-// n - number of neurons, f - activation function, size - number of features,  
-// z - preactivation, y - activations, w - weights, x - data, 
-void forward(int neurons, double (*activation)(double a), int input_size, 
-           double w[][input_size], double x[], double y[], double z[]) {
-
-    // Store the preactivation values for backprop
-    // For each neuron
-    for (int i=0; i<neurons; ++i) {
-        // For each input (feature or neuron from prior layer)
-        for (int j=0; j<input_size; ++j) {
-            z[i] += w[i][j] * x[j];
-        }
-    }
-
-    // Perform activation and store values
-    for (int i=0; i<neurons; ++i) 
-        y[i] = activation(z[i]);
-}
-
-
-
+    //
+    // // Batch foreward pass input layer into first hidden layer 1
+    // for (int row=0; row < DATA_ROWS; ++row) {
+    //
+    //     for (int i=0; i<HIDDEN_NEURONS; ++i) {
+    //
+    //         z1[row][i] = b1[i];
+    //
+    //         for (int j=0; j<INPUT_FEATURES; ++j) {
+    //
+    //             z1[row][i] += W1[i][j] * X[row][j];
+    //         }
+    //
+    //         a1[row][i] = 1 / (1 + exp(-z1[row][i]));       // sigmoid, try relu soon
+    //     }
+    // }
+    //
+    // // Batch forward pass hidden layer 1 into output layer
+    // for (int row=0; row < DATA_ROWS; ++row) {
+    //
+    //     for (int i=0; i<OUTPUT_NEURONS; ++i) {
+    //
+    //         z2[row][i] = b2[i];
+    //
+    //         for (int j=0; j<HIDDEN_NEURONS; ++j) {
+    //
+    //             z2[row][i] += W2[i][j] * a1[row][j];
+    //         }
+    //
+    //         a2[row][i] = 1 / (1 + exp(-z2[row][i]));           // sigmoi
+    //
+    //     }
+    // }
+    //
+    // // Print the hidden activations for the layers
+    // for (int i=0; i<DATA_ROWS; ++i) {
+    //     printf("a1 row%d ", i);
+    //     for (int j=0; j<HIDDEN_NEURONS; ++j) {
+    //         printf("%lf ", a1[i][j]);
+    //     }
+    //     printf("\n");
+    // }
+    // for (int i=0; i<DATA_ROWS; ++i) {
+    //     printf("a2 row%d ", i);
+    //     for (int j=0; j<OUTPUT_NEURONS; ++j) {
+    //     printf("%lf ", a2[i][j]);
+    //     }
+    //     printf("\n");
+    // }
+    // printf("\n");
