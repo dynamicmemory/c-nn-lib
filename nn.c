@@ -54,7 +54,14 @@ void backprop(double w[], double x[], double y, double t, int size, double lr, d
     *bias -= lr * error;
 }
 
-// Extremely verbose forward pass while i figure structure out
+// rows is the number of rows of the data, 
+// neurons is the number of neurons for this layer 
+// input_size is the number of neurons/features from previous layer or input 
+// linear_combination & weights is self explanatory 
+// inputs are either the prior layers activations or the input features 
+// actvations and bias are self explain, 
+// func is the activation function for the layer, 
+// Ill change the names eventually, keeping verbose for my sanity
 void forward(int rows, int neurons, int input_size, 
         double linear_combination[rows][neurons], double weights[neurons][input_size], 
         double inputs[rows][input_size], double activations[rows][neurons], 
@@ -100,6 +107,7 @@ int main(void) {
     forward(DATA_ROWS, HIDDEN_NEURONS, INPUT_FEATURES, z1, W1, X, a1, b1, relu); 
     forward(DATA_ROWS, OUTPUT_NEURONS, HIDDEN_NEURONS, z2, W2, a1, a2, b2, sigmoid); 
 
+    // input -> w1 -> z1 -> a1 -> w2 -> z2 -> a2 -> loss
     double lr = 0.01;
 
     double dW1[HIDDEN_NEURONS][INPUT_FEATURES] = {{0.0}};
@@ -108,6 +116,22 @@ int main(void) {
     double dW2[OUTPUT_NEURONS][HIDDEN_NEURONS] = {{0.0}};
     double db2[OUTPUT_NEURONS] = {0.01};
 
+    // loss 
+    double loss[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
+    for (int row=0; row<DATA_ROWS; ++row) 
+        for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
+            loss[row][neuron] = -(labels[row] * log(a2[row][neuron]) + 
+                                 (1-labels[row]) * log(1 - a2[row][neuron]));
+
+    // a2 -> z2 -> w2 -> a1 -> z1 -> w1 
+
+    // a2 -> z2 
+    double dz2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
+    for (int row=0; row<DATA_ROWS; ++row) 
+        for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
+            dz2[row][neuron] = a2[row][neuron] - labels[row];
+
+    // a2 -> z2 -> w2 -> a1 -> z1 -> w1 
     // And now we do loss and backprop....
 
     return 0;
