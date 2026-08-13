@@ -110,29 +110,68 @@ int main(void) {
     // input -> w1 -> z1 -> a1 -> w2 -> z2 -> a2 -> loss
     double lr = 0.01;
 
+    double dz1[DATA_ROWS][HIDDEN_NEURONS] = {0.0};
     double dW1[HIDDEN_NEURONS][INPUT_FEATURES] = {{0.0}};
+    double dA1[DATA_ROWS][HIDDEN_NEURONS] = {0.0};
     double db1[HIDDEN_NEURONS] = {0.01};
 
+
+    double dz2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
     double dW2[OUTPUT_NEURONS][HIDDEN_NEURONS] = {{0.0}};
     double db2[OUTPUT_NEURONS] = {0.01};
 
-    // loss 
+     // loss 
     double loss[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
     for (int row=0; row<DATA_ROWS; ++row) 
         for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
             loss[row][neuron] = -(labels[row] * log(a2[row][neuron]) + 
                                  (1-labels[row]) * log(1 - a2[row][neuron]));
 
-    // a2 -> z2 -> w2 -> a1 -> z1 -> w1 
-
     // a2 -> z2 
-    double dz2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
+
     for (int row=0; row<DATA_ROWS; ++row) 
         for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
             dz2[row][neuron] = a2[row][neuron] - labels[row];
 
-    // a2 -> z2 -> w2 -> a1 -> z1 -> w1 
-    // And now we do loss and backprop....
+    // z2 -> w2 -> a1 -> z1 -> w1 
+    for (int output=0; output<OUTPUT_NEURONS; ++output)
+        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+            for (int row=0; row<DATA_ROWS; ++row) 
+                dW2[output][neuron] += a1[row][neuron] * dz2[row][neuron];
+
+    // b2
+    for (int output=0; output<OUTPUT_NEURONS; ++output)
+        for (int row=0; row<DATA_ROWS; ++row) 
+            db2[output] += dz2[row][output];
+
+    // w2 -> a1 -> z1 -> w1 
+    for (int row=0; row<DATA_ROWS; ++row)
+        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+            dA1[row][neuron] += dz2[row][neuron] * W2[row][neuron];
+
+    // a1 -> z1 -> w1 
+    for (int row=0; row<DATA_ROWS; ++row)
+        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+            dz1[row][neuron] = dA1[row][neuron] * a1[row][neuron] * (1.0 - a1[row][neuron]);
+
+    // z1 -> w1 
+    for (int output=0; output<HIDDEN_NEURONS; ++output)
+        for (int input=0; input<INPUT_FEATURES; ++input)
+            for (int row=0; row<DATA_ROWS; ++row)
+                dW1[row][input] += X[row][input] * dz1[row][input];
+
+    // b1
+    for (int output=0; output<HIDDEN_NEURONS; ++output)
+        for (int row=0; row<DATA_ROWS; ++row)
+            db1[output] += dz1[row][output];
+
+    // update everything 
+    W2 -= lr * dW2;
+    b2 -= lr * db2;
+
+    W1 -= lr * dW1;
+    b1 -= lr * db1;
+
 
     return 0;
 }
