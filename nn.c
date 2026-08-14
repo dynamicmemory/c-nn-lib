@@ -104,17 +104,14 @@ int main(void) {
     double a2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
     double b2[OUTPUT_NEURONS] = {0.08};
 
-    forward(DATA_ROWS, HIDDEN_NEURONS, INPUT_FEATURES, z1, W1, X, a1, b1, relu); 
-    forward(DATA_ROWS, OUTPUT_NEURONS, HIDDEN_NEURONS, z2, W2, a1, a2, b2, sigmoid); 
-
     // input -> w1 -> z1 -> a1 -> w2 -> z2 -> a2 -> loss
-    double lr = 0.01;
+    double lr = 0.001;
+    int epochs = 5000;
 
     double dz1[DATA_ROWS][HIDDEN_NEURONS] = {0.0};
     double dW1[HIDDEN_NEURONS][INPUT_FEATURES] = {{0.0}};
     double dA1[DATA_ROWS][HIDDEN_NEURONS] = {0.0};
     double db1[HIDDEN_NEURONS] = {0.01};
-
 
     double dz2[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
     double dW2[OUTPUT_NEURONS][HIDDEN_NEURONS] = {{0.0}};
@@ -122,106 +119,135 @@ int main(void) {
 
      // loss 
     double loss[DATA_ROWS][OUTPUT_NEURONS] = {0.0};
-    for (int row=0; row<DATA_ROWS; ++row) 
-        for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
-            loss[row][neuron] = -(labels[row] * log(a2[row][neuron]) + 
-                                 (1-labels[row]) * log(1 - a2[row][neuron]));
 
-    // a2 -> z2 
+    int count = 0;
+    while (epochs-- > 0) {
 
-    for (int row=0; row<DATA_ROWS; ++row) 
-        for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
-            dz2[row][neuron] = a2[row][neuron] - labels[row];
+        forward(DATA_ROWS, HIDDEN_NEURONS, INPUT_FEATURES, z1, W1, X, a1, b1, sigmoid); 
+        forward(DATA_ROWS, OUTPUT_NEURONS, HIDDEN_NEURONS, z2, W2, a1, a2, b2, sigmoid); 
 
-    // z2 -> w2 -> a1 -> z1 -> w1 
-    for (int output=0; output<OUTPUT_NEURONS; ++output)
-        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
-            for (int row=0; row<DATA_ROWS; ++row) 
-                dW2[output][neuron] += a1[row][neuron] * dz2[row][neuron];
-
-    // b2
-    for (int output=0; output<OUTPUT_NEURONS; ++output)
+        // Find and print loss
         for (int row=0; row<DATA_ROWS; ++row) 
-            db2[output] += dz2[row][output];
+            for (int neuron=0; neuron<OUTPUT_NEURONS; ++neuron)
+                loss[row][neuron] = -(labels[row] * log(fmin(fmax(a2[row][neuron], 1e-15), 1.0 - 1e-15)) + 
+                        (1-labels[row]) * log(1 - fmin(fmax(a2[row][neuron], 1e-15), 1.0 - 1e-15)));
 
-    // w2 -> a1 -> z1 -> w1 
-    for (int row=0; row<DATA_ROWS; ++row)
-        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
-            dA1[row][neuron] += dz2[row][neuron] * W2[row][neuron];
-
-    // a1 -> z1 -> w1 
-    for (int row=0; row<DATA_ROWS; ++row)
-        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
-            dz1[row][neuron] = dA1[row][neuron] * a1[row][neuron] * (1.0 - a1[row][neuron]);
-
-    // z1 -> w1 
-    for (int output=0; output<HIDDEN_NEURONS; ++output)
-        for (int input=0; input<INPUT_FEATURES; ++input)
-            for (int row=0; row<DATA_ROWS; ++row)
-                dW1[row][input] += X[row][input] * dz1[row][input];
-
-    // b1
-    for (int output=0; output<HIDDEN_NEURONS; ++output)
+        double total_loss = 0.0;
         for (int row=0; row<DATA_ROWS; ++row)
-            db1[output] += dz1[row][output];
+            for (int output=0; output<OUTPUT_NEURONS; ++output)
+                total_loss += loss[row][output];
+        double avg_loss = total_loss / DATA_ROWS;
 
-    // update everything 
-    W2 -= lr * dW2;
-    b2 -= lr * db2;
+        count++;
+        if (epochs % 10 == 0)
+            printf("Epoch %d | Loss: %lf\n", count, avg_loss);
 
-    W1 -= lr * dW1;
-    b1 -= lr * db1;
+
+        // Backprop
+        // a2 -> z2 
+
+        for (int row=0; row<DATA_ROWS; ++row) 
+            for (int output=0; output<OUTPUT_NEURONS; ++output)
+                dz2[row][output] = a2[row][output] - labels[row];
+
+        // z2 -> w2 -> a1 -> z1 -> w1 
+        for (int output=0; output<OUTPUT_NEURONS; ++output)
+            for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+                for (int row=0; row<DATA_ROWS; ++row) 
+                    dW2[output][neuron] += a1[row][neuron] * dz2[row][neuron];
+
+        // b2
+        for (int output=0; output<OUTPUT_NEURONS; ++output)
+            for (int row=0; row<DATA_ROWS; ++row) 
+                db2[output] += dz2[row][output];
+
+        // w2 -> a1 -> z1 -> w1 
+        for (int row=0; row<DATA_ROWS; ++row)
+            for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+                for (int output=0; output<OUTPUT_NEURONS; ++output)
+                    dA1[row][neuron] += dz2[row][output] * W2[output][neuron];
+
+        // a1 -> z1 -> w1 
+        for (int row=0; row<DATA_ROWS; ++row)
+            for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+                dz1[row][neuron] = dA1[row][neuron] * a1[row][neuron] * (1.0 - a1[row][neuron]);
+
+        // z1 -> w1 
+        for (int output=0; output<HIDDEN_NEURONS; ++output)
+            for (int input=0; input<INPUT_FEATURES; ++input)
+                for (int row=0; row<DATA_ROWS; ++row)
+                    dW1[output][input] += X[row][input] * dz1[row][output];
+
+        // b1
+        for (int output=0; output<HIDDEN_NEURONS; ++output)
+            for (int row=0; row<DATA_ROWS; ++row)
+                db1[output] += dz1[row][output];
+
+        // update everything 
+        for (int output=0; output<OUTPUT_NEURONS; ++output) {
+            b2[output] -= lr * db2[output];
+            for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
+                W2[output][neuron] -= lr * dW2[output][neuron];
+        }
+
+        for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron) {
+            b1[neuron] -= lr * db1[neuron];
+            for (int feat=0; feat<INPUT_FEATURES; ++feat)
+                W1[neuron][feat] -= lr * dW1[neuron][feat];
+
+        }
+    }
 
 
     return 0;
 }
-    //
-    // // Batch foreward pass input layer into first hidden layer 1
-    // for (int row=0; row < DATA_ROWS; ++row) {
-    //
-    //     for (int i=0; i<HIDDEN_NEURONS; ++i) {
-    //
-    //         z1[row][i] = b1[i];
-    //
-    //         for (int j=0; j<INPUT_FEATURES; ++j) {
-    //
-    //             z1[row][i] += W1[i][j] * X[row][j];
-    //         }
-    //
-    //         a1[row][i] = 1 / (1 + exp(-z1[row][i]));       // sigmoid, try relu soon
-    //     }
-    // }
-    //
-    // // Batch forward pass hidden layer 1 into output layer
-    // for (int row=0; row < DATA_ROWS; ++row) {
-    //
-    //     for (int i=0; i<OUTPUT_NEURONS; ++i) {
-    //
-    //         z2[row][i] = b2[i];
-    //
-    //         for (int j=0; j<HIDDEN_NEURONS; ++j) {
-    //
-    //             z2[row][i] += W2[i][j] * a1[row][j];
-    //         }
-    //
-    //         a2[row][i] = 1 / (1 + exp(-z2[row][i]));           // sigmoi
-    //
-    //     }
-    // }
-    //
-    // // Print the hidden activations for the layers
-    // for (int i=0; i<DATA_ROWS; ++i) {
-    //     printf("a1 row%d ", i);
-    //     for (int j=0; j<HIDDEN_NEURONS; ++j) {
-    //         printf("%lf ", a1[i][j]);
-    //     }
-    //     printf("\n");
-    // }
-    // for (int i=0; i<DATA_ROWS; ++i) {
-    //     printf("a2 row%d ", i);
-    //     for (int j=0; j<OUTPUT_NEURONS; ++j) {
-    //     printf("%lf ", a2[i][j]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
+//
+// // Batch foreward pass input layer into first hidden layer 1
+// for (int row=0; row < DATA_ROWS; ++row) {
+//
+//     for (int i=0; i<HIDDEN_NEURONS; ++i) {
+//
+//         z1[row][i] = b1[i];
+//
+//         for (int j=0; j<INPUT_FEATURES; ++j) {
+//
+//             z1[row][i] += W1[i][j] * X[row][j];
+//         }
+//
+//         a1[row][i] = 1 / (1 + exp(-z1[row][i]));       // sigmoid, try relu soon
+//     }
+// }
+//
+// // Batch forward pass hidden layer 1 into output layer
+// for (int row=0; row < DATA_ROWS; ++row) {
+//
+//     for (int i=0; i<OUTPUT_NEURONS; ++i) {
+//
+//         z2[row][i] = b2[i];
+//
+//         for (int j=0; j<HIDDEN_NEURONS; ++j) {
+//
+//             z2[row][i] += W2[i][j] * a1[row][j];
+//         }
+//
+//         a2[row][i] = 1 / (1 + exp(-z2[row][i]));           // sigmoi
+//
+//     }
+// }
+//
+// // Print the hidden activations for the layers
+// for (int i=0; i<DATA_ROWS; ++i) {
+//     printf("a1 row%d ", i);
+//     for (int j=0; j<HIDDEN_NEURONS; ++j) {
+//         printf("%lf ", a1[i][j]);
+//     }
+//     printf("\n");
+// }
+// for (int i=0; i<DATA_ROWS; ++i) {
+//     printf("a2 row%d ", i);
+//     for (int j=0; j<OUTPUT_NEURONS; ++j) {
+//     printf("%lf ", a2[i][j]);
+//     }
+//     printf("\n");
+// }
+// printf("\n");
