@@ -145,18 +145,23 @@ int main(void) {
 
         // Backprop
         // a2 -> z2 
-
+        // Store the loss in dz2 by minusing the label from the output of the 
+        // activation of the layer 'a2'. This maybe back to front label - a2?
         for (int row=0; row<DATA_ROWS; ++row) 
             for (int output=0; output<OUTPUT_NEURONS; ++output)
                 dz2[row][output] = a2[row][output] - labels[row];
 
         // z2 -> w2 -> a1 -> z1 -> w1 
+        // Accumulate the input (a1 activation from prior layer) by the loss found 
+        // above (dz2)
         for (int output=0; output<OUTPUT_NEURONS; ++output)
             for (int neuron=0; neuron<HIDDEN_NEURONS; ++neuron)
                 for (int row=0; row<DATA_ROWS; ++row) 
-                    dW2[output][neuron] += a1[row][neuron] * dz2[row][neuron];
+                    dW2[output][neuron] += a1[row][neuron] * dz2[row][output];
 
         // b2
+        // get the loss for the bias terms, just assume * 1 therefore just the 
+        // error is applied
         for (int output=0; output<OUTPUT_NEURONS; ++output)
             for (int row=0; row<DATA_ROWS; ++row) 
                 db2[output] += dz2[row][output];
@@ -194,8 +199,9 @@ int main(void) {
             b1[neuron] -= lr * db1[neuron];
             for (int feat=0; feat<INPUT_FEATURES; ++feat)
                 W1[neuron][feat] -= lr * dW1[neuron][feat];
-
         }
+
+        // TODO: Reset all d arrays to 0 or else im accumulating grads each epoch
     }
 
 
