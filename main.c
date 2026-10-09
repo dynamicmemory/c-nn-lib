@@ -24,7 +24,8 @@ typedef struct {
 
     matrix_t dW;
     matrix_t dB;
-    double (*activation)(double);
+    double (*activation)(double a);
+    double (*d_activation)(double a);
 } layer_t;
 
 matrix_t create_toy_data();
@@ -36,8 +37,78 @@ layer_t layer(size_t input, size_t neurons, double(*activation)(double));
 double relu(double a);
 double sigmoid(double a);
 
-void forward(layer_t layer, matrix_t x);
-void backprop();
+void forward(layer_t *layer, matrix_t x);
+
+void backprop(layer_t *layers, matrix_t x, matrix_t y, double lr) {
+    // TODO: Clear gradients from previous training iterations
+    // TODO: Initialize dW, dZ, and d_activation prior to calling backprop
+    matrix_t dZ, dA;
+    for (size_t i=LAYERS-1; i>=0; --i) {
+        // Create temp matrix to hold dZ
+        dZ.rows = x.rows;
+        dZ.cols = layers[i].neurons;
+        dZ.data =  calloc(x.rows * layers[i].neurons, sizeof(double));
+
+        // Output layer, else hidden/input
+        if (i == LAYERS+1)
+            // Works for binary classification using binary cross entropy
+            for (size_t row=0; row<x.rows; ++row)
+                dZ.data[row] = layers[i].a.data[row] - y.data[row];
+        else {
+            for (size_t row=0; row<x.rows; ++row)
+                dZ.data[row] = dA.data[row] * layers[i].d_activation(layers[i].a.data[row]); 
+            free(dA.data);
+        }
+
+        // TODO: Just assign a point to the x data or dZ data and cut a loop out
+        // Input layer, else hidden/output
+        if (i-1 < 0)
+            for (size_t row=0; row<x.rows; ++row)
+                for (size_t neuron=0; neuron<layers[i].neurons; ++neuron) {
+
+                    layers[i].dB.data[neuron] += dZ.data[row * layers[i].neurons + neuron];
+
+                    for (size_t input=0; input<layers[i].inputs; ++input)
+                        layers[i].dW.data[neuron*layers[i].neurons + input] += 
+                            x.data[row*x.cols + input] * 
+                            dZ.data[row*layers[i].neurons+neuron];
+                }
+        else { 
+            for (size_t row=0; row<x.rows; ++row)
+                for (size_t neuron=0; neuron<layers[i].neurons; ++neuron) {
+                    layers[i].dB.data[neuron] += dZ.data[row * layers[i].neurons + neuron];
+                    for (size_t input=0; input<layers[i].inputs; ++input)
+                        layers[i].dW.data[neuron*layers[i].neurons + input] += 
+                            layers[i-1].a.data[row*x.cols + input] * 
+                            dZ.data[row*layers[i].neurons+neuron];
+                }
+
+            // Assign dA for the next rounds turn of finding dZ
+            dA.rows=x.rows;
+            dA.cols=layers[i].weights.cols;
+            dA.data= calloc(dA.rows * dA.cols, sizeof(double));
+            
+            for (size_t row=0; row<x.rows; ++row)
+                for (size_t neuron=0; neuron<layers[i].neurons; ++neuron)
+                    for (size_t input=0; input<layers[i].inputs; ++input)
+                        dA.data[row*x.cols + neuron] += 
+                            dZ.data[row*x.cols + input] 
+                            * layers[i].weights.data[neuron*layers[i].neurons + input];
+        }
+
+        free(dZ.data);
+    }
+
+    // Update all weights and bias
+    for (size_t i=0; i<LAYERS; ++i)
+        for (size_t neuron=0; neuron<layers[i].neurons; ++neuron) {
+            layers[i].bias.data[neuron] -= lr * layers[i].dB.data[neuron];
+            for (size_t input=0; input<layers[i].inputs; ++input) {
+                size_t w_idx = neuron * layers[i].neurons + input;
+                layers[i].weights.data[w_idx] -= lr * layers[i].dW.data[w_idx];
+            }
+        }
+}
 
 void fit();
 
@@ -50,34 +121,23 @@ int main(int argc, char *argv[]) {
     // Create matrix full of data 
     matrix_t x = create_toy_data();
     matrix_t y = create_labels();
-    layer_t l1 = layer(x.cols, 4, relu);
+
+    int features = x.cols;
+
+    layer_t l1 = layer(features, 4, relu);
     layer_t l2 = layer(l1.neurons, 4, relu);
     layer_t l3 = layer(l2.neurons, 1, sigmoid);
     
     layer_t layers[] = {l1,l2,l3};
 
-    // Forward 
-    l1.a.rows = x.rows;
-    l1.a.cols = l1.neurons;
-    l1.a.data = calloc(x.rows*l1.neurons, sizeof(double));
+    // "Training" loop
+    //TODO: Forward - unify to signal call
+    for (size_t i=0; i<LAYERS; ++i) {
+        forward(&layers[i], x);
 
-    for (size_t row=0; row<x.rows; ++row) {
-        for (size_t neuron=0; neuron<l1.neurons; ++neuron) {
-
-            size_t a_idx = row * l1.neurons + neuron;
-            double z = l1.bias.data[neuron];
-
-            for (size_t input=0; input<l1.inputs; ++input) {
-
-                size_t w_idx = neuron * l1.neurons + input;
-                size_t x_idx = row * x.cols + input;
-
-                z += l1.weights.data[w_idx] * x.data[x_idx]; 
-
-            }
-            l1.a.data[a_idx] = l1.activation(z); 
-        }
     }
+
+
 
     free(x.data);
     free(y.data);
@@ -116,11 +176,19 @@ matrix_t gen_bias_(size_t neurons) {
 }
 
 double relu(double a) {
-    return a < 0 ? 0 : a;
+    return a < 0.0 ? 0.0 : a;
+}
+
+double d_relu(double a) {
+    return a < 0.0 ? 0.0 : 1.0;
 }
 
 double sigmoid(double a) {
     return 1 / ( 1+exp(-a) );
+}
+
+double d_sigmoid(double a) {
+    return a * (1.0 - a);
 }
 
 layer_t layer(size_t inputs_size, size_t neurons, double(*activation)(double)) {
@@ -136,33 +204,33 @@ layer_t layer(size_t inputs_size, size_t neurons, double(*activation)(double)) {
     return l;
 }
 
-void forward(layer_t layer, matrix_t x) {
+void forward(layer_t *layer, matrix_t x) {
     // TODO: Eventually extract/network object to control batch size and activation structure
-    if (layer.a.data == NULL) {
-        layer.a.rows = x.rows;
-        layer.a.cols = layer.neurons;
-        layer.a.data = calloc(layer.a.rows*layer.neurons, sizeof(double));
+    if (layer->a.data == NULL) {
+        layer->a.rows = x.rows;
+        layer->a.cols = layer->neurons;
+        layer->a.data = calloc(layer->a.rows*layer->neurons, sizeof(double));
     }
 
     for (size_t row=0; row<x.rows; ++row) {
-        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
+        for (size_t neuron=0; neuron<layer->neurons; ++neuron) {
 
-            size_t a_idx = row * layer.neurons + neuron;
-            double z = layer.bias.data[neuron];
+            size_t a_idx = row * layer->neurons + neuron;
+            double z = layer->bias.data[neuron];
 
-            for (size_t input=0; input<layer.inputs; ++input) {
+            for (size_t input=0; input<layer->inputs; ++input) {
 
-                size_t w_idx = neuron * layer.neurons + input;
+                size_t w_idx = neuron * layer->neurons + input;
                 size_t x_idx = row * x.cols + input;
 
-                z += layer.weights.data[w_idx] * x.data[x_idx]; 
+                z += layer->weights.data[w_idx] * x.data[x_idx]; 
             }
-            layer.a.data[a_idx] = layer.activation(z); 
+            layer->a.data[a_idx] = layer->activation(z); 
         }
     }
 }
 
-void backprop() {
+void backprop(layer_t *layer, matrix_t x, matrix_t y) {
 }
 
 
