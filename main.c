@@ -28,6 +28,25 @@ typedef struct {
     double (*d_activation)(double a);
 } layer_t;
 
+// TODO: weight decay regularization param for a
+typedef struct {
+    size_t l_count;
+    size_t capacity;
+
+    size_t input_features;
+    size_t output_classes;
+
+    size_t input_layer; // 0;
+    size_t output_layer; // l_count - 1;
+
+    double learning_rate;
+    size_t epochs;
+
+    size_t loss_function;
+    layer_t *layers;
+} network_t;
+
+
 matrix_t create_toy_data();
 matrix_t create_labels();
 matrix_t gen_weights_(size_t inputs, size_t neurons, int random);
@@ -42,14 +61,26 @@ double binary_cross_entropy(layer_t layer, matrix_t y);
 
 void forward(layer_t *layer, matrix_t x);
 void backprop(layer_t *layers, matrix_t x, matrix_t y, double lr);
-void train(layer_t layers[], matrix_t x, matrix_t y);
-
+void network_backprop(network_t *nn, matrix_t x, matrix_t y);
+void train(network_t *nn, matrix_t x, matrix_t y);
 double predict(layer_t layers[], double new_x[]);
+double network_predict(network_t *nn, matrix_t preds);
+
+void neural_net(network_t *nn, size_t features, double lr, size_t epochs) {
+    nn->input_features = features;
+    nn->learning_rate  = lr;
+    nn->epochs         = epochs;
+}
+
+void add_layer(network_t *nn, size_t neurons, double(*func)(double a)) {
+    nn->l_count++;
+}
 
 int main(int argc, char *argv[]) {
     //TODO: this will have to be initialized once, not in a main eventually
-    // srand((unsigned)time(NULL)); 
-    srand(43); 
+    // TODO: Random weight initialziation sometimes causes training platue: FIX
+    srand((unsigned)time(NULL)); 
+    // srand(43); 
 
     printf("Neural Network\n");
     // Create matrix full of data 
@@ -65,19 +96,27 @@ int main(int argc, char *argv[]) {
     
     layer_t layers[] = {l1,l2,l3};
 
-    train(layers, x, y);
+    network_t nn;
+    nn.l_count = 3;
+    nn.layers = layers;
+
+    neural_net(&nn, 4, 0.01, 10000);
+
+    train(&nn, x, y);
 
     for (int i=0; i<y.rows; ++i) 
-        printf("Target: %f | Predicted: %f\n", y.data[i], layers[LAYERS-1].a.data[i]);
+        // printf("Target: %f | Predicted: %f\n", y.data[i], layers[LAYERS-1].a.data[i]);
+        printf("Target: %f | Predicted: %f\n", y.data[i], nn.layers[nn.l_count-1].a.data[i]);
 
+    // TODO: Consider an easier way for a user to construct predictions
     double new_x[] = {2,1,1,2,3,1};
-    double prediction = predict(layers, new_x);
+    matrix_t m = {.rows = 1, .cols = features, .data = new_x};
+    double prediction = network_predict(&nn, m);
+    // double prediction = predict(layers, new_x);
 
     printf("For 2,1,1,2,3,1, network predicted: %f\n", prediction);
 
     // TODO: Clean up function that generalizes this work
-    free(x.data);
-    free(y.data);
     for (size_t i=0; i<LAYERS; ++i) {
         free(layers[i].weights.data);
         free(layers[i].bias.data);
@@ -85,6 +124,10 @@ int main(int argc, char *argv[]) {
         free(layers[i].dW.data);
         free(layers[i].dB.data);
     }
+    free(x.data);
+    free(y.data);
+
+    printf("Script end\n");
     return 0;
 }
 
@@ -155,6 +198,35 @@ matrix_t gen_bias_(size_t neurons, int random) {
     return b;
 }
 
+void train(network_t *nn, matrix_t x, matrix_t y){
+    double prior_loss;
+    double loss = 0.0;
+    double epsilon = 1e-15;
+
+    int count = 0; // TODO: Count be a network variable for a user to call
+    while (nn->epochs-- > 0) {
+        matrix_t *input = &x;
+        for (size_t i=0; i<nn->l_count; ++i) {
+            forward(&nn->layers[i], *input);
+            input = &nn->layers[i].a;
+        }
+
+        loss = binary_cross_entropy(nn->layers[nn->l_count-1], y);
+        // backprop(nn->layers, x, y, 0.01);
+        network_backprop(nn, x, y);
+
+        // TODO: clean up check terminal conditions
+        double delta = loss-prior_loss;
+        double change = delta < 0 ? delta * -1 : delta;
+        if (change < epsilon)
+            break;
+        prior_loss = loss;
+
+        if (count % 500 == 0)
+            printf("Epoch: %d | Loss: %f\n", count, loss);
+        count++;
+    }
+}
 
 void forward(layer_t *layer, matrix_t x) {
     // TODO: Eventually extract/network object to control batch size and activation structure
@@ -180,6 +252,106 @@ void forward(layer_t *layer, matrix_t x) {
             layer->a.data[a_idx] = layer->activation(z); 
         }
     }
+}
+
+void network_backprop(network_t *nn, matrix_t x, matrix_t y) {
+    // TODO: Move the clear gradients from previous training iterations code out
+    for (size_t i=nn->l_count; i-- > 0; ) 
+        for(size_t row=0; row<nn->layers[i].dW.rows; ++row) {
+            nn->layers[i].dB.data[row] = 0;
+            for(size_t col=0; col<nn->layers[i].dW.cols; ++col)
+                nn->layers[i].dW.data[row * nn->layers[i].dW.cols + col] = 0;
+    }
+
+    matrix_t dZ, dA;
+    for (size_t i=nn->l_count; i-- > 0; ) {
+        // Create temp matrix to hold dZ
+        dZ.rows = x.rows;
+        dZ.cols = nn->layers[i].neurons;
+        dZ.data =  calloc(x.rows * nn->layers[i].neurons, sizeof(double));
+
+        // Output layer, else hidden/input
+        if (i == nn->l_count-1)
+            // Works for binary classification using binary cross entropy
+            for (size_t row=0; row<x.rows; ++row)
+                dZ.data[row] = nn->layers[i].a.data[row] - y.data[row];
+        else {
+            // TODO: Logically shouldnt arrive here without dA assigned, but not impossible!
+            for (size_t row=0; row<x.rows; ++row)
+                for (size_t neuron=0; neuron<nn->layers[i].neurons; ++neuron) {
+                    size_t dZ_idx = row * nn->layers[i].neurons + neuron;
+                    size_t dA_idx = row * dA.cols + neuron;
+                dZ.data[dZ_idx] = dA.data[dA_idx] * nn->layers[i].d_activation(nn->layers[i].a.data[dZ_idx]); 
+                }
+
+            free(dA.data);
+        }
+
+        // TODO: Just assign a point to the x data or dZ data and cut a loop out
+        // Input layer, else hidden/output
+        if (i == 0)
+            for (size_t row=0; row<x.rows; ++row)
+                for (size_t neuron=0; neuron<nn->layers[i].neurons; ++neuron) {
+
+                    nn->layers[i].dB.data[neuron] += dZ.data[row * nn->layers[i].neurons + neuron];
+
+                    for (size_t input=0; input<nn->layers[i].inputs; ++input) {
+
+                        size_t w_idx = neuron * nn->layers[i].weights.cols + input;
+                        size_t x_idx = row * x.cols + input;
+                        size_t dZ_idx = row * nn->layers[i].neurons + neuron;
+
+                        nn->layers[i].dW.data[w_idx] += x.data[x_idx] * dZ.data[dZ_idx];
+                    }
+                }
+        else { 
+            for (size_t row=0; row<x.rows; ++row)
+
+                for (size_t neuron=0; neuron<nn->layers[i].neurons; ++neuron) {
+
+                    nn->layers[i].dB.data[neuron] += dZ.data[row * nn->layers[i].neurons + neuron];
+
+                    for (size_t input=0; input<nn->layers[i].inputs; ++input) {
+
+                        size_t w_idx = neuron * nn->layers[i].weights.cols + input;
+                        size_t a_idx = row * nn->layers[i-1].a.cols + input;
+                        size_t dZ_idx = row * nn->layers[i].neurons + neuron;
+
+                        nn->layers[i].dW.data[w_idx] += nn->layers[i-1].a.data[a_idx] * dZ.data[dZ_idx];
+                    }
+                }
+
+            // TODO: Calculates when i == 1 which isnt needed, use specific i>1 eventually
+            // Assign dA for the next rounds turn of finding dZ
+            dA.rows=x.rows;
+            dA.cols=nn->layers[i].weights.cols;
+            dA.data= calloc(dA.rows * dA.cols, sizeof(double));
+            
+            for (size_t row=0; row<x.rows; ++row)
+
+                for (size_t neuron=0; neuron<nn->layers[i].neurons; ++neuron)
+
+                    for (size_t input=0; input<nn->layers[i].inputs; ++input) {
+                        size_t w_idx = neuron * nn->layers[i].weights.cols + input;
+                        size_t dA_idx = row * dA.cols + input;
+                        size_t dZ_idx = row * nn->layers[i].neurons + neuron;
+
+                        dA.data[dA_idx] += dZ.data[dZ_idx] * nn->layers[i].weights.data[w_idx];
+                    }
+        }
+
+        free(dZ.data);
+    }
+
+    // Update all weights and bias
+    for (size_t i=0; i<nn->l_count; ++i)
+        for (size_t neuron=0; neuron<nn->layers[i].neurons; ++neuron) {
+            nn->layers[i].bias.data[neuron] -= nn->learning_rate * nn->layers[i].dB.data[neuron];
+            for (size_t input=0; input<nn->layers[i].inputs; ++input) {
+                size_t w_idx = neuron * nn->layers[i].weights.cols + input;
+                nn->layers[i].weights.data[w_idx] -= nn->learning_rate * nn->layers[i].dW.data[w_idx];
+            }
+        }
 }
 
 void backprop(layer_t *layers, matrix_t x, matrix_t y, double lr) {
@@ -295,35 +467,19 @@ double binary_cross_entropy(layer_t layer, matrix_t y) {
     return loss;
 }
 
-void train(layer_t layers[], matrix_t x, matrix_t y){
-    // "Training" loop
-    double lr = 0.01;
-    int epochs = 10000;
-    int count = 0;
-    double epsilon = 1e-15;
-    double prior_loss = 0.0;
-    double loss = 0.0;
-    while (epochs-- > 0) {
-        matrix_t *input = &x;
-        for (size_t i=0; i<LAYERS; ++i) {
-            forward(&layers[i], *input);
-            input = &layers[i].a;
-        }
-
-        loss = binary_cross_entropy(layers[LAYERS-1], y);
-        backprop(layers, x, y, 0.01);
-
-        // TODO: clean up check terminal conditions
-        double delta = loss-prior_loss;
-        double change = delta < 0 ? delta * -1 : delta;
-        if (change < epsilon)
-            break;
-        prior_loss = loss;
-
-        if (count % 500 == 0)
-            printf("Epoch: %d | Loss: %f\n", count, loss);
-        count++;
+double network_predict(network_t *nn, matrix_t preds) {
+    layer_t *layers = nn->layers;
+    // matrix_t m;
+    // m.rows=1;
+    // m.cols=5;
+    // m.data = new_x;
+    matrix_t *input = &preds;
+    for (size_t i=0; i<LAYERS; ++i) {
+        forward(&layers[i], *input);
+        input = &layers[i].a;
     }
+    double p = layers[nn->l_count-1].a.data[0];
+    return p;
 }
 
 double predict(layer_t *layers, double new_x[]) {
