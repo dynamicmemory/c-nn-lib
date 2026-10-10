@@ -4,7 +4,6 @@
 #include <math.h>
 #include <time.h>
 
-
 // TODO: Think of a better way to track layers to free their memory.
 static int LAYERS=0;
 
@@ -43,6 +42,145 @@ double binary_cross_entropy(layer_t layer, matrix_t y);
 
 void forward(layer_t *layer, matrix_t x);
 void backprop(layer_t *layers, matrix_t x, matrix_t y, double lr);
+void train(layer_t layers[], matrix_t x, matrix_t y);
+
+double predict(layer_t layers[], double new_x[]);
+
+int main(int argc, char *argv[]) {
+    //TODO: this will have to be initialized once, not in a main eventually
+    // srand((unsigned)time(NULL)); 
+    srand(43); 
+
+    printf("Neural Network\n");
+    // Create matrix full of data 
+    matrix_t x = create_toy_data();
+    matrix_t y = create_labels();
+
+    int features = x.cols;
+
+    // TODO: Auto assign d_activation depending on activation function
+    layer_t l1 = layer(features, 4, relu, d_relu);
+    layer_t l2 = layer(l1.neurons, 4, relu, d_relu);
+    layer_t l3 = layer(l2.neurons, 1, sigmoid, d_sigmoid);
+    
+    layer_t layers[] = {l1,l2,l3};
+
+    train(layers, x, y);
+
+    for (int i=0; i<y.rows; ++i) 
+        printf("Target: %f | Predicted: %f\n", y.data[i], layers[LAYERS-1].a.data[i]);
+
+    double new_x[] = {2,1,1,2,3,1};
+    double prediction = predict(layers, new_x);
+
+    printf("For 2,1,1,2,3,1, network predicted: %f\n", prediction);
+
+    // TODO: Clean up function that generalizes this work
+    free(x.data);
+    free(y.data);
+    for (size_t i=0; i<LAYERS; ++i) {
+        free(layers[i].weights.data);
+        free(layers[i].bias.data);
+        free(layers[i].a.data);
+        free(layers[i].dW.data);
+        free(layers[i].dB.data);
+    }
+    return 0;
+}
+
+double relu(double a) {
+    return a < 0.0 ? 0.0 : a;
+}
+
+double d_relu(double a) {
+    return a > 0.0 ? 1.0 : 0.0;
+}
+
+double sigmoid(double a) {
+    return 1 / ( 1+exp(-a) );
+}
+
+double d_sigmoid(double a) {
+    return a * (1.0 - a);
+}
+
+// double *softmax() {}
+// double *d_softmax() {}
+
+layer_t layer(size_t inputs_size, size_t neurons, double(*activation)(double), double(*d_activation)(double)) {
+    layer_t l = { 
+        .inputs = inputs_size,     
+        .neurons = neurons, 
+        .weights = gen_weights_(inputs_size, neurons, 1), 
+        .bias = gen_bias_(neurons, 1),
+        .a = {0},
+        .dW = gen_weights_(inputs_size, neurons, 0),
+        .dB = gen_bias_(neurons, 0),
+        .activation = activation,
+        .d_activation = d_activation
+    };
+    LAYERS++;
+    return l;
+}
+
+matrix_t gen_weights_(size_t inputs, size_t neurons, int random) {
+    matrix_t w = {
+        .rows = neurons, 
+        .cols = inputs,
+        .data = calloc(neurons * inputs, sizeof(double))
+    };
+
+    for (size_t i=0; i<w.rows*w.cols; ++i)
+        if (random)
+            w.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
+        else 
+            w.data[i] = 0;
+
+    return w;
+}
+
+matrix_t gen_bias_(size_t neurons, int random) {
+    matrix_t b = {
+        .rows = 1, 
+        .cols = neurons,
+        .data = calloc(1*neurons, sizeof(double))
+    };
+
+    for (size_t i=0; i<b.rows*b.cols; ++i)
+        if (random)
+            b.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
+        else 
+            b.data[i] = 0;
+
+    return b;
+}
+
+
+void forward(layer_t *layer, matrix_t x) {
+    // TODO: Eventually extract/network object to control batch size and activation structure
+    if (layer->a.data == NULL) {
+        layer->a.rows = x.rows;
+        layer->a.cols = layer->neurons;
+        layer->a.data = calloc(layer->a.rows*layer->neurons, sizeof(double));
+    }
+
+    for (size_t row=0; row<x.rows; ++row) {
+        for (size_t neuron=0; neuron<layer->neurons; ++neuron) {
+
+            size_t a_idx = row * layer->neurons + neuron;
+            double z = layer->bias.data[neuron];
+
+            for (size_t input=0; input<layer->inputs; ++input) {
+
+                size_t w_idx = neuron * layer->weights.cols + input;
+                size_t x_idx = row * x.cols + input;
+
+                z += layer->weights.data[w_idx] * x.data[x_idx]; 
+            }
+            layer->a.data[a_idx] = layer->activation(z); 
+        }
+    }
+}
 
 void backprop(layer_t *layers, matrix_t x, matrix_t y, double lr) {
     // TODO: Move the clear gradients from previous training iterations code out
@@ -157,33 +295,12 @@ double binary_cross_entropy(layer_t layer, matrix_t y) {
     return loss;
 }
 
-void fit();
-
-
-int main(int argc, char *argv[]) {
-    //TODO: this will have to be initialized once, not in a main eventually
-    srand((unsigned)time(NULL)); 
-
-    printf("Neural Network\n");
-    // Create matrix full of data 
-    matrix_t x = create_toy_data();
-    matrix_t y = create_labels();
-
-    int features = x.cols;
-
-    // TODO: Auto assign d_activation depending on activation function
-    layer_t l1 = layer(features, 4, relu, d_relu);
-    layer_t l2 = layer(l1.neurons, 4, relu, d_relu);
-    layer_t l3 = layer(l2.neurons, 1, sigmoid, d_sigmoid);
-    
-    layer_t layers[] = {l1,l2,l3};
-
+void train(layer_t layers[], matrix_t x, matrix_t y){
     // "Training" loop
-    //TODO: Forward - unify to signal call
     double lr = 0.01;
     int epochs = 10000;
     int count = 0;
-    double epsilon = 1e-5;
+    double epsilon = 1e-15;
     double prior_loss = 0.0;
     double loss = 0.0;
     while (epochs-- > 0) {
@@ -203,123 +320,25 @@ int main(int argc, char *argv[]) {
             break;
         prior_loss = loss;
 
-        if (count % 50 == 0)
+        if (count % 500 == 0)
             printf("Epoch: %d | Loss: %f\n", count, loss);
         count++;
     }
+}
 
-    for (int i=0; i<y.rows; ++i) 
-        printf("Target: %f | Predicted: %f\n", y.data[i], layers[LAYERS-1].a.data[i]);
-
-
-    free(x.data);
-    free(y.data);
+double predict(layer_t *layers, double new_x[]) {
+    matrix_t m;
+    m.rows=1;
+    m.cols=5;
+    m.data = new_x;
+    matrix_t *input = &m;
     for (size_t i=0; i<LAYERS; ++i) {
-        free(layers[i].weights.data);
-        free(layers[i].bias.data);
-        free(layers[i].a.data);
-        free(layers[i].dW.data);
-        free(layers[i].dB.data);
+        forward(&layers[i], *input);
+        input = &layers[i].a;
     }
-    return 0;
+    double p = layers[LAYERS-1].a.data[0];
+    return p;
 }
-
-
-double relu(double a) {
-    return a < 0.0 ? 0.0 : a;
-}
-
-double d_relu(double a) {
-    return a > 0.0 ? 1.0 : 0.0;
-}
-
-double sigmoid(double a) {
-    return 1 / ( 1+exp(-a) );
-}
-
-double d_sigmoid(double a) {
-    return a * (1.0 - a);
-}
-
-// double *softmax() {}
-// double *d_softmax() {}
-
-layer_t layer(size_t inputs_size, size_t neurons, double(*activation)(double), double(*d_activation)(double)) {
-    layer_t l = { 
-        .inputs = inputs_size,     
-        .neurons = neurons, 
-        .weights = gen_weights_(inputs_size, neurons, 1), 
-        .bias = gen_bias_(neurons, 1),
-        .a = {0},
-        .dW = gen_weights_(inputs_size, neurons, 0),
-        .dB = gen_bias_(neurons, 0),
-        .activation = activation,
-        .d_activation = d_activation
-    };
-    LAYERS++;
-    return l;
-}
-
-matrix_t gen_weights_(size_t inputs, size_t neurons, int random) {
-    matrix_t w = {
-        .rows = neurons, 
-        .cols = inputs,
-        .data = calloc(neurons * inputs, sizeof(double))
-    };
-
-    for (size_t i=0; i<w.rows*w.cols; ++i)
-        if (random)
-            w.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
-        else 
-            w.data[i] = 0;
-
-    return w;
-}
-
-matrix_t gen_bias_(size_t neurons, int random) {
-    matrix_t b = {
-        .rows = 1, 
-        .cols = neurons,
-        .data = calloc(1*neurons, sizeof(double))
-    };
-
-    for (size_t i=0; i<b.rows*b.cols; ++i)
-        if (random)
-            b.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
-        else 
-            b.data[i] = 0;
-
-    return b;
-}
-
-
-void forward(layer_t *layer, matrix_t x) {
-    // TODO: Eventually extract/network object to control batch size and activation structure
-    if (layer->a.data == NULL) {
-        layer->a.rows = x.rows;
-        layer->a.cols = layer->neurons;
-        layer->a.data = calloc(layer->a.rows*layer->neurons, sizeof(double));
-    }
-
-    for (size_t row=0; row<x.rows; ++row) {
-        for (size_t neuron=0; neuron<layer->neurons; ++neuron) {
-
-            size_t a_idx = row * layer->neurons + neuron;
-            double z = layer->bias.data[neuron];
-
-            for (size_t input=0; input<layer->inputs; ++input) {
-
-                size_t w_idx = neuron * layer->weights.cols + input;
-                size_t x_idx = row * x.cols + input;
-
-                z += layer->weights.data[w_idx] * x.data[x_idx]; 
-            }
-            layer->a.data[a_idx] = layer->activation(z); 
-        }
-    }
-}
-
-
 
 //******************************************************************************
 
