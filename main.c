@@ -1,5 +1,6 @@
 /* TODO: PREDICT: Make it work, for binary and multiclass, consider regression 
           for the future too.*/
+// TODO: Onehotencoding for labels... decide if always must and how to handle user
 // TODO: Enum for activation / deactivation version to not pass in decactive 
 // TODO: weight decay regularization param for a
 // TODO: Fix consts throughout the project
@@ -7,6 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <string.h>
 
 // activation, derivative of activation
 typedef void (*activation_fn)(const double *z, double *a, size_t n);
@@ -15,6 +17,7 @@ typedef double (*dActivation_fn)(double a);
 typedef struct {
     size_t rows;
     size_t cols;
+    size_t size;
     double *data;
 } matrix_t;
 
@@ -22,7 +25,7 @@ typedef struct {
     size_t inputs;
     size_t neurons;
 
-    matrix_t weights;
+    matrix_t W;
     matrix_t bias;
 
     matrix_t a;
@@ -47,6 +50,7 @@ typedef struct {
 
     double learning_rate;
     size_t epochs;
+    size_t seed;
 
     loss_fn loss;
     layer_t *layers;
@@ -58,8 +62,8 @@ typedef struct {
 } predict_t;
 
 void neural_net(network_t *nn, size_t features, double lr, size_t epochs, loss_fn loss);
-void add_layer(network_t *nn, size_t neurons, activation_fn afunc, dActivation_fn dfunc);
-layer_t layer(size_t inputs, size_t neurons, activation_fn afunc, dActivation_fn dfunc);
+void add_layer(network_t *nn, size_t neurons, activation_fn afunc);
+layer_t layer(size_t inputs, size_t neurons, activation_fn afunc);
 void cleanup(network_t *nn, matrix_t x, matrix_t y);
 
 matrix_t random_matrix(size_t inputs, size_t neurons);
@@ -71,13 +75,18 @@ void softmax(const double *z, double *a, size_t n);
 double d_relu(double a);
 double d_sigmoid(double a);
 void d_softmax();
+dActivation_fn get_dActivation(activation_fn afunc);
 
 double binary_cross_entropy(layer_t layer, matrix_t y);
 double categorical_cross_entropy(layer_t layer, matrix_t y);
 
 void forward(layer_t *layer, matrix_t x);
 void backprop(network_t *nn, matrix_t x, matrix_t y);
+void update_weights_bias(network_t *nn);
+void allocate_activations(layer_t *layer, matrix_t inputs);
+void free_activations(network_t *nn);
 
+void set_seed(network_t *nn, double seed);
 void train(network_t *nn, matrix_t x, matrix_t y);
 void evaluate(network_t *nn, matrix_t x, matrix_t y);
 void binary_evaluator(network_t *nn, matrix_t x, matrix_t y);
@@ -90,8 +99,6 @@ matrix_t create_binary_labels();
 matrix_t create_multiclass_labels();
 
 int main(int argc, char *argv[]) {
-    // TODO: initialize somewhere once + rand weights sometimes causes training platue: FIX
-    srand((unsigned)time(NULL)); 
     binary_test();
     multiclass_test();
     return 0;
@@ -100,13 +107,18 @@ int main(int argc, char *argv[]) {
 // TODO: dw & db can be freed in train, consider resetting the network here too!
 void cleanup(network_t *nn, matrix_t x, matrix_t y) {
     for (size_t i=0; i<nn->layer_count; ++i) {
-        free(nn->layers[i].weights.data);
+        free(nn->layers[i].W.data);
         free(nn->layers[i].bias.data);
         free(nn->layers[i].dW.data);
         free(nn->layers[i].dB.data);
     }
     free(x.data);
     free(y.data);
+}
+
+void set_seed(network_t *nn, double seed) {
+    nn->seed = seed;
+    srand(seed);
 }
 
 void neural_net(network_t *nn, size_t features, double lr, size_t epochs, loss_fn loss) {
@@ -116,13 +128,16 @@ void neural_net(network_t *nn, size_t features, double lr, size_t epochs, loss_f
     nn->output_classes   = 0;
     nn->output_layer_idx = 0;
     nn->learning_rate    = lr;
+    nn->seed             = (unsigned)time(NULL);
     nn->epochs           = epochs;
     nn->layers           = NULL;
     nn->loss             = loss;
+
+    srand(nn->seed); 
 }
 
 // TODO: think of defence against non initialized network using this function
-void add_layer(network_t *nn, size_t neurons, activation_fn afunc, dActivation_fn dfunc) {
+void add_layer(network_t *nn, size_t neurons, activation_fn afunc) {
     if (nn->layer_count == nn->capacity)
         nn->capacity = nn->capacity == 0 ? 2 : nn->capacity * 2;
 
@@ -136,7 +151,7 @@ void add_layer(network_t *nn, size_t neurons, activation_fn afunc, dActivation_f
         input_size = nn->layers[i].neurons;
 
     // Add layer
-    layer_t l = layer(input_size, neurons, afunc, dfunc);
+    layer_t l = layer(input_size, neurons, afunc);
     // TODO: Enum that auto assigns d_activation depending on activation passed in
     nn->layers[i] = l;
     nn->layer_count++;
@@ -144,17 +159,26 @@ void add_layer(network_t *nn, size_t neurons, activation_fn afunc, dActivation_f
     nn->output_layer_idx = nn->layer_count - 1;
 }
 
-layer_t layer(size_t inputs, size_t neurons, activation_fn afunc, dActivation_fn dfunc) {
+// TODO: Null check and enum these instead of if elsing a written list
+dActivation_fn get_dActivation(activation_fn afunc) {
+    if (afunc == sigmoid)
+        return d_sigmoid;
+    if (afunc == relu) 
+        return d_relu;
+    return NULL;
+}
+
+layer_t layer(size_t inputs, size_t neurons, activation_fn afunc) {
     layer_t l = { 
         .inputs = inputs,     
         .neurons = neurons, 
-        .weights = random_matrix(inputs, neurons), 
+        .W = random_matrix(inputs, neurons), 
         .bias = random_matrix(1, neurons),
         .a = {0},
         .dW = zeros_matrix(inputs, neurons),
         .dB = zeros_matrix(1, neurons),
         .activation = afunc,
-        .d_activation = dfunc
+        .d_activation = get_dActivation(afunc)
     };
     return l;
 }
@@ -261,10 +285,10 @@ void forward(layer_t *layer, matrix_t x) {
             double z = layer->bias.data[neuron];
 
             for (size_t input=0; input<layer->inputs; ++input) {
-                size_t w_idx = neuron * layer->weights.cols + input;
+                size_t w_idx = neuron * layer->W.cols + input;
                 size_t x_idx = row * x.cols + input;
 
-                z += layer->weights.data[w_idx] * x.data[x_idx]; 
+                z += layer->W.data[w_idx] * x.data[x_idx]; 
             }
             Z[neuron] = z;
         }
@@ -273,171 +297,164 @@ void forward(layer_t *layer, matrix_t x) {
     free(Z);
 }
 
-// TODO: Eliminate the assumption of binary/categorical cross entropy + sigmoid/softmax output layer.
 void backprop(network_t *nn, matrix_t x, matrix_t y) {
-    // TODO: Move the clear gradients from previous training iterations code out
-    for (size_t i=nn->layer_count; i-- > 0; ) 
-        for(size_t row=0; row<nn->layers[i].dW.rows; ++row) {
-            nn->layers[i].dB.data[row] = 0;
-            for(size_t col=0; col<nn->layers[i].dW.cols; ++col)
-                nn->layers[i].dW.data[row * nn->layers[i].dW.cols + col] = 0;
-    }
     layer_t *layer = nn->layers;
-    matrix_t dZ, dA;
-    for (size_t i=nn->layer_count; i-- > 0; ) {
-        // Create temp matrix to hold dZ
+
+    // Reset gradients 
+    for (size_t i=0; i<nn->layer_count; ++i) {
+        memset(layer[i].dB.data, 0, layer[i].dB.rows * layer[i].dB.cols * sizeof(double));
+        memset(layer[i].dW.data, 0, layer[i].dW.rows * layer[i].dW.cols * sizeof(double));
+    }
+
+    matrix_t dZ = {0}, dA = {0};
+    for (size_t i=nn->layer_count; i-->0; ) {
         dZ.rows = x.rows;
         dZ.cols = nn->layers[i].neurons;
-        dZ.data =  calloc(x.rows * nn->layers[i].neurons, sizeof(double));
+        dZ.data = malloc(dZ.rows * dZ.cols * sizeof(double));
 
-        // Output layer, else hidden/input
+        // Calculating dZ: if output layer, else hidden/input
         if (i == nn->output_layer_idx)
-            // Works for binary classification using binary cross entropy
             for (size_t row=0; row<x.rows; ++row)
                 for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
                     size_t dZ_idx = row * layer[i].neurons + neuron;
+                    // TODO: Assumption - bin/categorical cross entropy + sigmoid/softmax
                     dZ.data[dZ_idx] = layer[i].a.data[dZ_idx] - y.data[dZ_idx];
                 }
         else {
-            // TODO: Logically shouldnt arrive here without dA assigned, but not impossible!
             for (size_t row=0; row<x.rows; ++row)
                 for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
                     size_t dZ_idx = row * layer[i].neurons + neuron;
                     size_t dA_idx = row * dA.cols + neuron;
                     dZ.data[dZ_idx] = dA.data[dA_idx] * layer[i].d_activation(layer[i].a.data[dZ_idx]); 
                 }
-
             free(dA.data);
         }
 
-        // TODO: Just assign a point to the x data or dZ data and cut a loop out
-        // Input layer, else hidden/output
-        if (i == 0)
-            for (size_t row=0; row<x.rows; ++row)
-                for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
-                    layer[i].dB.data[neuron] += dZ.data[row * layer[i].neurons + neuron];
+        // Calculate dW: Input layer, else hidden/output
+        matrix_t *input_ptr = (i==0) ? &x : &layer[i-1].a;
+        for (size_t row=0; row<input_ptr->rows; ++row)
+            for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
+                layer[i].dB.data[neuron] += dZ.data[row * layer[i].neurons + neuron];
 
-                    for (size_t input=0; input<layer[i].inputs; ++input) {
+                for (size_t input=0; input<layer[i].inputs; ++input) {
+                    size_t w_idx = neuron * layer[i].W.cols + input;
+                    size_t a_idx = row * input_ptr->cols + input;
+                    size_t dZ_idx = row * layer[i].neurons + neuron;
 
-                        size_t w_idx = neuron * layer[i].weights.cols + input;
-                        size_t x_idx = row * x.cols + input;
-                        size_t dZ_idx = row * layer[i].neurons + neuron;
-
-                        layer[i].dW.data[w_idx] += x.data[x_idx] * dZ.data[dZ_idx];
-                    }
+                    layer[i].dW.data[w_idx] += input_ptr->data[a_idx] * dZ.data[dZ_idx];
                 }
-        else { 
-            for (size_t row=0; row<x.rows; ++row)
-                for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
-                    layer[i].dB.data[neuron] += dZ.data[row * layer[i].neurons + neuron];
+            }
 
-                    for (size_t input=0; input<layer[i].inputs; ++input) {
-
-                        size_t w_idx = neuron * layer[i].weights.cols + input;
-                        size_t a_idx = row * layer[i-1].a.cols + input;
-                        size_t dZ_idx = row * layer[i].neurons + neuron;
-
-                        layer[i].dW.data[w_idx] += layer[i-1].a.data[a_idx] * dZ.data[dZ_idx];
-                    }
-                }
-
-            // TODO: Calculates when i == 1 which isnt needed, use specific i>1 eventually
-            // Assign dA for the next rounds turn of finding dZ
+        // Calculate dA for current row, for use in the next layers dZ calculations
+        if (i > 0) {
             dA.rows=x.rows;
-            dA.cols=layer[i].weights.cols;
+            dA.cols=layer[i].W.cols;
             dA.data= calloc(dA.rows * dA.cols, sizeof(double));
             
             for (size_t row=0; row<x.rows; ++row)
                 for (size_t neuron=0; neuron<layer[i].neurons; ++neuron)
                     for (size_t input=0; input<layer[i].inputs; ++input) {
-                        size_t w_idx = neuron * layer[i].weights.cols + input;
+                        size_t w_idx = neuron * layer[i].W.cols + input;
                         size_t dA_idx = row * dA.cols + input;
                         size_t dZ_idx = row * layer[i].neurons + neuron;
 
-                        dA.data[dA_idx] += dZ.data[dZ_idx] * layer[i].weights.data[w_idx];
+                        dA.data[dA_idx] += dZ.data[dZ_idx] * layer[i].W.data[w_idx];
                     }
         }
         free(dZ.data);
     }
 
-    // Update all weights and bias
+    // TODO: Average the gradient losses to match our current loss function evaluation
+    for (size_t i=0; i<nn->layer_count; ++i) {
+        for (size_t j = 0; j< layer[i].dW.cols * layer[i].dW.rows; ++j)
+            layer[i].dW.data[j] /= x.rows;
+        for (size_t j = 0; j< layer[i].dB.cols * layer[i].dB.rows; ++j)
+            layer[i].dB.data[j] /= x.rows;
+    }
+}
+
+void update_weights_bias(network_t *nn) {
+    layer_t *layer = nn->layers;
+    double lr = nn->learning_rate;
+
     for (size_t i=0; i<nn->layer_count; ++i)
         for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
-            layer[i].bias.data[neuron] -= nn->learning_rate * layer[i].dB.data[neuron];
+            layer[i].bias.data[neuron] -= lr * layer[i].dB.data[neuron];
             for (size_t input=0; input<layer[i].inputs; ++input) {
-                size_t w_idx = neuron * layer[i].weights.cols + input;
-                layer[i].weights.data[w_idx] -= nn->learning_rate * layer[i].dW.data[w_idx];
+                size_t w_idx = neuron * layer[i].W.cols + input;
+                layer[i].W.data[w_idx] -= lr * layer[i].dW.data[w_idx];
             }
         }
 }
 
 void train(network_t *nn, matrix_t x, matrix_t y){
     double prior_loss = INFINITY;
-    double loss = 0.0;
-    double epsilon = 1e-15;
+    double loss, delta, change;
+    double epsilon = 1e-8;
 
+    layer_t *layer = nn->layers;
     int count = 0; // TODO: Count be a network variable for a user to call
     while (nn->epochs-- > 0) {
         matrix_t *input = &x;
         for (size_t i=0; i<nn->layer_count; ++i) {
-            // TODO: Potentially extract
-            if (nn->layers[i].a.data == NULL) {
-                nn->layers[i].a.rows = input->rows;
-                nn->layers[i].a.cols = nn->layers[i].neurons;
-                nn->layers[i].a.data = malloc(nn->layers[i].a.rows * nn->layers[i].a.cols * sizeof(double));
-            }
-            forward(&nn->layers[i], *input);
-            input = &nn->layers[i].a;
+            allocate_activations(&layer[i], *input);
+            forward(&layer[i], *input);
+            input = &layer[i].a;
         }
 
-        loss = nn->loss(nn->layers[nn->output_layer_idx], y);
+        loss = nn->loss(layer[nn->output_layer_idx], y);
         backprop(nn, x, y);
+        update_weights_bias(nn);
 
-        // TODO: clean up check terminal conditions
-        double delta = loss-prior_loss;
-        double change = delta < 0 ? delta * -1 : delta;
+        delta = loss-prior_loss;
+        change = delta < 0 ? delta * -1 : delta;
         if (change < epsilon)
             break;
         prior_loss = loss;
 
+        // TODO: This needs to be user controlled
         if (count % 500 == 0)
             printf("Epoch: %d | Loss: %f\n", count, loss);
         count++;
     }
+    free_activations(nn);
+}
+
+void allocate_activations(layer_t *layer, matrix_t inputs) {
+    if (layer->a.data != NULL)
+        return;
+
+    layer->a.rows = inputs.rows;
+    layer->a.cols = layer->neurons;
+    layer->a.data = malloc(layer->a.rows * layer->a.cols * sizeof(double));
+}
+
+void free_activations(network_t *nn) {
+    layer_t *layer = nn->layers;
+
     for (size_t i=0; i<nn->layer_count; ++i) {
-        free(nn->layers[i].a.data);
-        nn->layers[i].a.data = NULL;
+        free(layer[i].a.data);
+        layer[i].a.data = NULL;
     }
 }
 
+// TODO: x y size match
 void binary_evaluator(network_t *nn, matrix_t x, matrix_t y) {
     double *preds = malloc(x.rows * y.cols * sizeof(double));
     predict(nn, x, preds);
+    size_t pred = 0;
 
-    for (int row=0; row<y.rows; ++row) { 
-        size_t best = 0;
+    for (size_t row=0; row<y.rows; ++row) { 
         size_t best_y = 0;
 
-        for (size_t c=0; c<nn->output_classes; ++c) {
+        pred = preds[row] > 0.5 ? 1 : 0;
+        best_y = y.data[row];
 
-            size_t current_class_idx = row * nn->output_classes + c;
-            size_t best_class_idx = row * nn->output_classes + best;
-            size_t current_target_class = row * y.cols + c;
-            size_t predicted_target_class = row * y.cols + best_y;
-
-            if (preds[current_class_idx] > 0.5) 
-                best = 1;
-            else  
-                best = 0;
-            best_y = y.data[current_target_class];
-
-            printf("a[%zu]: %f ", c, preds[current_class_idx]);
-            // printf("a[%zu]: %f ", c, a_values[current_class_idx]);
-        }
-        printf("Target: %zu | Predicted: %zu\n", best_y, best);
+        printf("a[%zu]: %f ", row, preds[row]);
+    printf("Target: %zu | Predicted: %zu\n", best_y, pred);
     }
     // TODO: As it stands we must free preds here, but this will change so a user 
-    //       can use the returned values or we will store conf mat + metrics somewhere prior to freeing here 
+    // can use the returned values or we will store conf mat + metrics somewhere prior to freeing here 
     free(preds);
 }
 
@@ -470,27 +487,19 @@ void evaluate(network_t *nn, matrix_t x, matrix_t y) {
     free(preds);
 }
 
-// TODO: Change to output multiclass as well
 void predict(network_t *nn, matrix_t m, double *preds) {
-    layer_t *layers = nn->layers;
+    layer_t *layer = nn->layers;
     matrix_t *input = &m;
 
     for (size_t i=0; i<nn->layer_count; ++i) {
-        if (nn->layers[i].a.data == NULL) {
-            nn->layers[i].a.rows = input->rows;
-            nn->layers[i].a.cols = nn->layers[i].neurons;
-            nn->layers[i].a.data = malloc(nn->layers[i].a.rows * nn->layers[i].a.cols * sizeof(double));
-        }
-        forward(&layers[i], *input);
-        input = &layers[i].a;
+        allocate_activations(&layer[i], *input);
+        forward(&layer[i], *input);
+        input = &layer[i].a;
     }
     for (size_t i=0; i<m.rows * nn->output_classes; ++i)
-        preds[i] = layers[nn->output_layer_idx].a.data[i];
+        preds[i] = layer[nn->output_layer_idx].a.data[i];
 
-    for (size_t i=0; i<nn->layer_count; ++i) {
-        free(nn->layers[i].a.data);
-        nn->layers[i].a.data = NULL;
-    }
+    free_activations(nn);
 }
 
 //******************************************************************************
@@ -556,9 +565,9 @@ void binary_test() {
     network_t nn;
 
     neural_net(&nn, features, 0.01, 10000, binary_cross_entropy);
-    add_layer(&nn, 4, relu, d_relu);
-    add_layer(&nn, 4, relu, d_relu);
-    add_layer(&nn, 1, sigmoid, d_sigmoid);
+    add_layer(&nn, 4, relu);
+    add_layer(&nn, 4, relu);
+    add_layer(&nn, 1, sigmoid);
 
     train(&nn, x, y);
     binary_evaluator(&nn, x, y);
@@ -573,7 +582,7 @@ void binary_test() {
     for (size_t i=0; i<nn.output_classes; ++i)
         if (preds[i] > best)
             best = i;
-    printf("For 2,1,1,2,3,1, network predicted: %f\n", preds[best]);
+    printf("For 2,1,1,2,3,1, network predicted: %d\n", preds[best] > 0.5 ? 1 : 0);
 
     cleanup(&nn, x, y);
 }
@@ -588,16 +597,16 @@ void multiclass_test() {
     network_t nn;
 
     neural_net(&nn, features, 0.01, 10000, categorical_cross_entropy);
-    add_layer(&nn, 10, relu, d_relu);
-    add_layer(&nn, 10, relu, d_relu);
-    add_layer(&nn, 5, relu, d_relu);
-    add_layer(&nn, 3, softmax, NULL);
+    add_layer(&nn, 10, relu);
+    add_layer(&nn, 10, relu);
+    add_layer(&nn, 5, relu);
+    add_layer(&nn, 3, softmax);
 
     train(&nn, x, y);
     evaluate(&nn, x, y);
 
     // TODO: Consider an easier way for a user to construct predictions
-    double new_x[] = {2,1,1,2,3,1};
+    double new_x[] = {5,5,5,6,7,4};
     matrix_t m = {.rows = 1, .cols = features, .data = new_x};
     double preds[nn.output_classes];
     predict(&nn, m, preds);
@@ -608,7 +617,7 @@ void multiclass_test() {
             best = i;
         printf("preds[%zu]: %f, best idx: %zu | val %f\n", i, preds[i], best, preds[best]);
     }
-    printf("For 2,1,1,2,3,1, network predicted: %zu\n", best);
+    printf("For 5,5,5,6,7,4 network predicted: %zu\n", best);
 
     cleanup(&nn, x, y);
     printf("Script end\n");
