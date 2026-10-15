@@ -4,105 +4,13 @@
 // TODO: Enum for activation / deactivation version to not pass in decactive 
 // TODO: weight decay regularization param for a
 // TODO: Fix consts throughout the project
+#include "nn.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
 #include <string.h>
-
-// activation, derivative of activation
-typedef void (*activation_fn)(const double *z, double *a, size_t n);
-typedef double (*dActivation_fn)(double a);
-
-typedef struct {
-    size_t rows;
-    size_t cols;
-    size_t size;
-    double *data;
-} matrix_t;
-
-typedef struct {
-    size_t inputs;
-    size_t neurons;
-
-    matrix_t W;
-    matrix_t bias;
-
-    matrix_t a;
-
-    matrix_t dW;
-    matrix_t dB;
-    activation_fn activation;
-    dActivation_fn d_activation;
-} layer_t;
-
-typedef double (*loss_fn)(layer_t, matrix_t);
-
-typedef struct {
-    size_t layer_count;
-    size_t capacity;
-
-    size_t input_features;
-    size_t output_classes;
-
-    size_t input_layer; // 0;
-    size_t output_layer_idx; // l_count - 1;
-
-    double learning_rate;
-    size_t epochs;
-    size_t seed;
-
-    loss_fn loss;
-    layer_t *layers;
-} network_t;
-
-typedef struct {
-    size_t class;
-    double *probabilities;
-} predict_t;
-
-void neural_net(network_t *nn, size_t features, double lr, size_t epochs, loss_fn loss);
-void add_layer(network_t *nn, size_t neurons, activation_fn afunc);
-layer_t layer(size_t inputs, size_t neurons, activation_fn afunc);
-void cleanup(network_t *nn, matrix_t x, matrix_t y);
-
-matrix_t random_matrix(size_t inputs, size_t neurons);
-matrix_t zeros_matrix(size_t inputs, size_t neurons);
-
-void relu(const double *z, double *a, size_t n);
-void sigmoid(const double *z, double *a, size_t n);
-void softmax(const double *z, double *a, size_t n);
-double d_relu(double a);
-double d_sigmoid(double a);
-void d_softmax();
-dActivation_fn get_dActivation(activation_fn afunc);
-
-double binary_cross_entropy(layer_t layer, matrix_t y);
-double categorical_cross_entropy(layer_t layer, matrix_t y);
-
-void forward(layer_t *layer, matrix_t x);
-void backprop(network_t *nn, matrix_t x, matrix_t y);
-void update_weights_bias(network_t *nn);
-void allocate_activations(layer_t *layer, matrix_t inputs);
-void free_activations(network_t *nn);
-
-void set_seed(network_t *nn, double seed);
-void train(network_t *nn, matrix_t x, matrix_t y);
-void evaluate(network_t *nn, matrix_t x, matrix_t y);
-void binary_evaluator(network_t *nn, matrix_t x, matrix_t y);
-void predict(network_t *nn, matrix_t m, double *preds);
-
-void binary_test();
-void multiclass_test();
-matrix_t create_toy_data();
-matrix_t create_binary_labels();
-matrix_t create_multiclass_labels();
-
-int main(int argc, char *argv[]) {
-    binary_test();
-    multiclass_test();
-    return 0;
-}
 
 // TODO: dw & db can be freed in train, consider resetting the network here too!
 void cleanup(network_t *nn, matrix_t x, matrix_t y) {
@@ -390,7 +298,7 @@ void update_weights_bias(network_t *nn) {
 void train(network_t *nn, matrix_t x, matrix_t y){
     double prior_loss = INFINITY;
     double loss, delta, change;
-    double epsilon = 1e-8;
+    double epsilon = 1e-6;
 
     layer_t *layer = nn->layers;
     int count = 0; // TODO: Count be a network variable for a user to call
@@ -413,7 +321,7 @@ void train(network_t *nn, matrix_t x, matrix_t y){
         prior_loss = loss;
 
         // TODO: This needs to be user controlled
-        if (count % 500 == 0)
+        // if (count % 500 == 0)
             printf("Epoch: %d | Loss: %f\n", count, loss);
         count++;
     }
@@ -462,6 +370,10 @@ void evaluate(network_t *nn, matrix_t x, matrix_t y) {
     double *preds = malloc(x.rows * y.cols * sizeof(double));
     predict(nn, x, preds);
 
+    // TODO: Temp accuracy measure 
+    double accuracy, pos, neg;
+    accuracy = pos = neg = 0;
+
     for (int row=0; row<y.rows; ++row) { 
         size_t best = 0;
         size_t best_y = 0;
@@ -478,10 +390,15 @@ void evaluate(network_t *nn, matrix_t x, matrix_t y) {
             if (y.data[current_target_class] != 0) 
                 best_y = c;
 
-            printf("a[%zu]: %f ", c, preds[current_class_idx]);
+            // printf("a[%d]: %f ", row, preds[current_class_idx]);
         }
-        printf("Target: %zu | Predicted: %zu\n", best_y, best);
+        // printf("Target: %zu | Predicted: %zu\n", best_y, best);
+        if (best_y == best) 
+            pos++;
+        else 
+            neg++;
     }
+    printf("Accuracy: %f\n", pos/(pos+neg));
     // TODO: As it stands we must free preds here, but this will change so a user 
     //       can use the returned values or we will store conf mat + metrics somewhere prior to freeing here 
     free(preds);
@@ -502,123 +419,3 @@ void predict(network_t *nn, matrix_t m, double *preds) {
     free_activations(nn);
 }
 
-//******************************************************************************
-// TESTS THE NETWORK 
-//******************************************************************************
-
-// TODO: Only for testing 
-matrix_t create_toy_data() {
-    matrix_t m;
-    m.rows=6;
-    m.cols=6;
-    m.data = calloc(m.rows*m.cols, sizeof(double));
-    double d[] = {
-        1,2,3,3,2,1, 
-        5,5,4,5,4,5, 
-        4,5,4,5,5,4, 
-        9,8,9,7,8,9, 
-        3,2,3,1,2,2,
-        7,8,7,7,8,9,
-    };
-    for (size_t i=0; i<m.rows*m.cols; ++i)
-        m.data[i] = d[i];
-    return m;
-}
-
-// TODO: Only for testing 
-matrix_t create_binary_labels() {
-    matrix_t m;
-    m.rows=6;
-    m.cols=1;
-    m.data = calloc(m.rows*m.cols, sizeof(double));
-    double d[] = {0, 1, 0, 1, 0, 1};
-    for (size_t i=0; i<m.rows*m.cols; ++i)
-        m.data[i] = d[i];
-    return m;
-}
-
-matrix_t create_multiclass_labels() {
-    matrix_t m;
-    m.rows=6;
-    m.cols=3;
-    m.data = calloc(m.rows*m.cols, sizeof(double));
-    double d[] = {
-        1, 0, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 0, 1,
-        1, 0, 0,
-        0, 0, 1};
-    for (size_t i=0; i<m.rows*m.cols; ++i)
-        m.data[i] = d[i];
-    return m;
-}
-
-void binary_test() {
-    printf("BINARY\n");
-    // Create matrix full of data 
-    matrix_t x = create_toy_data();
-    matrix_t y = create_binary_labels();
-
-    int features = x.cols;
-
-    network_t nn;
-
-    neural_net(&nn, features, 0.01, 10000, binary_cross_entropy);
-    add_layer(&nn, 4, relu);
-    add_layer(&nn, 4, relu);
-    add_layer(&nn, 1, sigmoid);
-
-    train(&nn, x, y);
-    binary_evaluator(&nn, x, y);
-
-    // TODO: Consider an easier way for a user to construct predictions
-    double new_x[] = {2,1,1,2,3,1};
-    matrix_t m = {.rows = 1, .cols = features, .data = new_x};
-    double preds[1];
-    predict(&nn, m, preds);
-
-    size_t best = 0;
-    for (size_t i=0; i<nn.output_classes; ++i)
-        if (preds[i] > best)
-            best = i;
-    printf("For 2,1,1,2,3,1, network predicted: %d\n", preds[best] > 0.5 ? 1 : 0);
-
-    cleanup(&nn, x, y);
-}
-
-void multiclass_test() {
-    printf("MULTICLASS\n");
-    // Create matrix full of data 
-    matrix_t x = create_toy_data();
-    matrix_t y = create_multiclass_labels();
-    size_t features = x.cols;
-
-    network_t nn;
-
-    neural_net(&nn, features, 0.01, 10000, categorical_cross_entropy);
-    add_layer(&nn, 10, relu);
-    add_layer(&nn, 10, relu);
-    add_layer(&nn, 5, relu);
-    add_layer(&nn, 3, softmax);
-
-    train(&nn, x, y);
-    evaluate(&nn, x, y);
-
-    // TODO: Consider an easier way for a user to construct predictions
-    double new_x[] = {5,5,5,6,7,4};
-    matrix_t m = {.rows = 1, .cols = features, .data = new_x};
-    double preds[nn.output_classes];
-    predict(&nn, m, preds);
-
-    size_t best = 0;
-    for (size_t i=0; i<m.rows * nn.output_classes; ++i) {
-        if (preds[i] > preds[best])
-            best = i;
-        printf("preds[%zu]: %f, best idx: %zu | val %f\n", i, preds[i], best, preds[best]);
-    }
-    printf("For 5,5,5,6,7,4 network predicted: %zu\n", best);
-
-    cleanup(&nn, x, y);
-    printf("Script end\n");
-}
