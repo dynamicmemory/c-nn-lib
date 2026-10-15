@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
 
 
     network_t nn;
-    neural_net(&nn, x_small.cols, 0.2, 500, categorical_cross_entropy);
+    neural_net(&nn, x_small.cols, 0.2, 1000, categorical_cross_entropy);
     set_seed(&nn, 69);
     add_layer(&nn, 32, relu);
     add_layer(&nn, y_small.cols, softmax);
