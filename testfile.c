@@ -124,16 +124,19 @@ int main(int argc, char *argv[]) {
     matrix_t x_test = load_mnist_images(test_images);
     matrix_t y_test = load_mnist_labels(test_labels);
     
-    printf("x_train Shape: %zu x %zu\n", x_train.rows, x_train.cols);
-    printf("y_train Shape: %zu x %zu\n", y_train.rows, y_train.cols);
-    printf("First pixel: %f\n", x_train.data[0]);
-
-    if (x_train.rows == y_train.rows) 
-        printf("x.rows == y.rows\n");
+    // printf("x_train Shape: %zu x %zu\n", x_train.rows, x_train.cols);
+    // printf("y_train Shape: %zu x %zu\n", y_train.rows, y_train.cols);
+    // printf("First pixel: %f\n", x_train.data[0]);
+    //
+    // if (x_train.rows == y_train.rows) 
+    //     printf("x.rows == y.rows\n");
 
     // mnist_print_sample(&x_train, &y_train, 1990);
     // Create a subset to test with 
-    int n = 2000;
+    int n = 60000;
+    int epochs = 2000;
+    double lr = 0.2;
+
     matrix_t x_small = {
         .rows = n,
         .cols = x_train.cols,
@@ -151,9 +154,10 @@ int main(int argc, char *argv[]) {
     for (size_t i=0; i<y_small.size; ++i)
         y_small.data[i] = y_train.data[i];
 
+    printf("Training on: %d samples, for %d epochs, with %f lr\n", n, epochs, lr);
 
     network_t nn;
-    neural_net(&nn, x_small.cols, 0.2, 1000, categorical_cross_entropy);
+    neural_net(&nn, x_small.cols, lr, epochs, categorical_cross_entropy);
     set_seed(&nn, 69);
     add_layer(&nn, 32, relu);
     add_layer(&nn, y_small.cols, softmax);

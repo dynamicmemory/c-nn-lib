@@ -6,7 +6,7 @@
 
 /*
  * Loads the MNIST images from an IDX image file. Each image is flattened into 
- * a single row, with pixel values normalized to the range [0.0, 1.0].
+ * a single row, with pixel values normalized from 0 255 to the range [0.0, 1.0].
  * 
  * Params: 
  *   path - path to the mnist file

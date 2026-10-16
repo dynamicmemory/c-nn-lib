@@ -5,8 +5,15 @@
 #include <stdlib.h>
 
 /*
- *
+ * Read a 32-bit unsigned interger from a file in big-endian byte order. 
  * 
+ * Params:
+ *   file - Input file positioned at the next four bytes.
+ *   out  - Pointer to receive the decoded integer.
+ * 
+ * Returns:
+ *   1 on success or 0 if the arguments are invalid or fewer than four bytes 
+ *   can be read.
  */
 static int read_uint32(FILE *file, uint32_t *out) {
     unsigned char bytes[4];
@@ -23,101 +30,130 @@ static int read_uint32(FILE *file, uint32_t *out) {
 matrix_t load_mnist_images(const char *path) {
     matrix_t x = {0};
 
+    if (path == NULL) {
+        fprintf(stderr, "load_mnist_images: path is NULL\n");
+        return x;
+    }
+
     FILE *file = fopen(path, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Failed to open image file: %s\n", path);
+        fprintf(stderr, "load_mnist_images: Failed to open image file: %s\n", path);
         return x;
     }
 
     uint32_t magic, samples, rows, cols;
     if ( !read_uint32(file, &magic) || !read_uint32(file, &samples) ||
          !read_uint32(file, &rows)  || !read_uint32(file, &cols) ) { 
-        fprintf(stderr, "Failed to read image header\n");
+        fprintf(stderr, "load_mnist_images: Failed to read image header\n");
         fclose(file);
         return x;
     }
 
     if (magic!=2051 || samples==0 || rows==0 || cols==0) {
-        fprintf(stderr, "Invalid MNIST image header\n");
+        fprintf(stderr, "load_mnist_images: Invalid MNIST image header\n");
+        fclose(file);
+        return x;
+    }
+
+    if ((size_t)samples > SIZE_MAX / rows || 
+        (size_t)samples * rows > SIZE_MAX / cols) { 
+        fprintf(stderr, "load_mnist_images: Image dimensions overflowed\n");
         fclose(file);
         return x;
     }
 
     size_t total_pixels = (size_t)samples * rows * cols;
-    unsigned char *pixels = malloc(total_pixels * sizeof(unsigned char));
+    if (total_pixels > SIZE_MAX / sizeof(double)) {
+        fprintf(stderr, "load_mnist_images: Matrix size allocation overflowed\n");
+        fclose(file);
+        return x;
+    }
 
+    unsigned char *pixels = malloc(total_pixels * sizeof(unsigned char));
     if (pixels == NULL) {
-        printf("Failed to allocate pixel memory\n");
+        printf("load_mnist_images: Failed to allocate pixel memory\n");
         fclose(file);
         return x;
     }
 
     size_t pixels_read = fread(pixels, sizeof(unsigned char), total_pixels, file);
-
     if (pixels_read != total_pixels) {
-        printf("failed to read image pixels\n");
+        printf("load_mnist_images: Failed to read image pixels\n");
         free(pixels);
         fclose(file);
         return x;
     }
 
+    fclose(file);
+
+
+    x.data = malloc((size_t)samples*rows*cols*sizeof(double));
+    if (x.data == NULL) {
+        printf("load_mnist_images: Failed to allocate matrix\n");
+        free(pixels);
+        fclose(file);
+        return x;
+    }
     x.rows = samples;
     x.cols = rows*cols;
     x.size = total_pixels;
-    x.data = malloc((size_t)samples*rows*cols*sizeof(double));
-
-    if (x.data == NULL) {
-        printf("Failed to allocate matrix\n");
-        free(pixels);
-        fclose(file);
-        return x;
-    }
     
     for (size_t i=0; i<x.size; ++i) 
         x.data[i] = pixels[i] / 255.0;
     free(pixels);
-    fclose(file);
+
     return x;
 }
 
 matrix_t load_mnist_labels(const char *path) {
     matrix_t y = {0};
 
+    if (path == NULL) {
+        fprintf(stderr, "load_mnist_labels: path is NULL\n");
+        return y;
+    }
+
     FILE *file = fopen(path, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Failed to open label file: %s\n", path);
+        fprintf(stderr, "load_mnist_labels: Failed to open label file: %s\n", path);
         return y;
     }
 
     uint32_t magic, n_labels;
     if ( !read_uint32(file, &magic) || !read_uint32(file, &n_labels) ) {
-        printf("Failed to read label headers\n");
+        fprintf(stderr, "load_mnist_labels: Failed to read label headers\n");
         fclose(file);
         return y;
     }
 
     if (magic!=2049 || n_labels==0) {
-        fprintf(stderr, "Invalid MNIST label header\n");
+        fprintf(stderr, "load_mnist_labels: Invalid MNIST label header\n");
+        fclose(file);
+        return y;
+    }
+
+    if ((size_t)n_labels > SIZE_MAX / sizeof(double) / 10) {
+        fprintf(stderr, "load_mnist_labels: Matrix size allocation overflowed\n");
         fclose(file);
         return y;
     }
 
     unsigned char *labels = malloc((size_t)n_labels * sizeof(*labels));
-
     if (labels == NULL) {
-        printf("Failed to allocate label memory\n");
+        fprintf(stderr, "load_mnist_labels: Failed to allocate label memory\n");
         fclose(file);
         return y;
     }
 
     size_t labels_read = fread(labels, sizeof(unsigned char), n_labels, file);
-
     if (labels_read != n_labels) {
-        printf("Failed to read all labels\n");
+        fprintf(stderr, "load_mnist_labels: Failed to read all labels\n");
         free(labels);
         fclose(file);
         return y;
     }
+
+    fclose(file);
 
     y.rows = n_labels;
     y.cols = 10;
@@ -125,7 +161,7 @@ matrix_t load_mnist_labels(const char *path) {
     y.data = calloc((size_t)n_labels * 10, sizeof(double));
 
     if (y.data == NULL) {
-        printf("Failed to allocate matrix\n");
+        fprintf(stderr, "load_mnist_labels: Failed to allocate matrix\n");
         free(labels);
         fclose(file);
         return y;
@@ -135,7 +171,6 @@ matrix_t load_mnist_labels(const char *path) {
         y.data[i*y.cols + labels[i]] = 1.0;
 
     free(labels);
-    fclose(file);
     return y;
 }
 
