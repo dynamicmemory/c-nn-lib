@@ -8,127 +8,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <time.h>
 #include <string.h>
 
-// TODO: dw & db can be freed in train, consider resetting the network here too!
-void cleanup(network_t *nn, matrix_t x, matrix_t y) {
-    for (size_t i=0; i<nn->layer_count; ++i) {
-        free(nn->layers[i].W.data);
-        free(nn->layers[i].bias.data);
-        free(nn->layers[i].dW.data);
-        free(nn->layers[i].dB.data);
-    }
-    free(x.data);
-    free(y.data);
-}
-
-void set_seed(network_t *nn, double seed) {
-    nn->seed = seed;
-    srand(seed);
-}
-
-void neural_net(network_t *nn, size_t features, double lr, size_t epochs, loss_fn loss) {
-    nn->layer_count      = 0;
-    nn->capacity         = 0;
-    nn->input_features   = features;
-    nn->output_classes   = 0;
-    nn->output_layer_idx = 0;
-    nn->learning_rate    = lr;
-    nn->seed             = (unsigned)time(NULL);
-    nn->epochs           = epochs;
-    nn->layers           = NULL;
-    nn->loss             = loss;
-
-    srand(nn->seed); 
-}
-
-// TODO: think of defence against non initialized network using this function
-void add_layer(network_t *nn, size_t neurons, activation_fn afunc) {
-    if (nn->layer_count == nn->capacity)
-        nn->capacity = nn->capacity == 0 ? 2 : nn->capacity * 2;
-
-    // TODO: Add failure check
-    nn->layers = realloc(nn->layers, nn->capacity * sizeof(layer_t));
-
-    // Get the input size for the layer from prior layers output or input features
-    int input_size = nn->input_features;
-    size_t i;
-    for (i=0; i<nn->layer_count; ++i)
-        input_size = nn->layers[i].neurons;
-
-    // Add layer
-    layer_t l = layer(input_size, neurons, afunc);
-    // TODO: Enum that auto assigns d_activation depending on activation passed in
-    nn->layers[i] = l;
-    nn->layer_count++;
-    nn->output_classes = neurons;
-    nn->output_layer_idx = nn->layer_count - 1;
-}
-
-// TODO: Null check and enum these instead of if elsing a written list
-dActivation_fn get_dActivation(activation_fn afunc) {
-    if (afunc == sigmoid)
-        return d_sigmoid;
-    if (afunc == relu) 
-        return d_relu;
-    return NULL;
-}
-
-layer_t layer(size_t inputs, size_t neurons, activation_fn afunc) {
-    layer_t l = { 
-        .inputs = inputs,     
-        .neurons = neurons, 
-        .W = random_matrix(inputs, neurons), 
-        .bias = random_matrix(1, neurons),
-        .a = {0},
-        .dW = zeros_matrix(inputs, neurons),
-        .dB = zeros_matrix(1, neurons),
-        .activation = afunc,
-        .d_activation = get_dActivation(afunc)
-    };
-    return l;
-}
-
-// Activation functions
-void relu(const double *z, double *a, size_t neurons) {
-    for (size_t neuron=0; neuron < neurons; ++neuron)
-        a[neuron] = z[neuron] < 0.0 ? 0.0 : z[neuron];
-}
-
-void sigmoid(const double *z, double *a, size_t neurons) {
-    for (size_t neuron=0; neuron<neurons; ++neuron) 
-        a[neuron] = 1 / ( 1+exp(-z[neuron]) );
-}
-
-void softmax(const double *z, double *a, size_t neurons) {
-    double max_z = z[0];
-    double total_sum = 0.0;
-
-    for (size_t neuron=0; neuron<neurons; ++neuron)
-        if (z[neuron] > max_z)
-            max_z = z[neuron];
-
-    for (size_t neuron=0; neuron<neurons; ++neuron) {
-        a[neuron] = exp(z[neuron] - max_z);
-        total_sum += a[neuron];
-    }
-
-    for (size_t neuron=0; neuron<neurons; ++neuron)
-        a[neuron] /= total_sum;
-}
-
-double d_relu(double a) {
-    return a > 0.0 ? 1.0 : 0.0;
-}
-
-double d_sigmoid(double a) {
-    return a * (1.0 - a);
-}
-
-// TODO: this.
-void d_softmax() {}
 
 // Loss functions
 double binary_cross_entropy(layer_t layer, matrix_t y) {
@@ -163,26 +47,6 @@ double categorical_cross_entropy(layer_t layer, matrix_t y) {
     return loss /y.rows;
 }
 
-matrix_t random_matrix(size_t inputs, size_t neurons) {
-    matrix_t w = {
-        .rows = neurons, 
-        .cols = inputs,
-        .data = malloc(neurons * inputs * sizeof(double))
-    };
-
-    for (size_t i=0; i<w.rows*w.cols; ++i)
-        w.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
-    return w;
-}
-
-matrix_t zeros_matrix(size_t inputs, size_t neurons) {
-    matrix_t w = {
-        .rows = neurons, 
-        .cols = inputs,
-        .data = calloc(neurons * inputs, sizeof(double))
-    };
-    return w;
-}
 
 void forward(layer_t *layer, matrix_t x) {
     double *Z = calloc(layer->neurons, sizeof(double));
@@ -418,4 +282,229 @@ void predict(network_t *nn, matrix_t m, double *preds) {
 
     free_activations(nn);
 }
+
+
+// matrix.c
+matrix_t random_matrix(size_t rows, size_t cols) {
+    if (rows == 0 || cols == 0 || rows > SIZE_MAX / cols)
+        return (matrix_t){0}; 
+
+    size_t size = rows * cols;
+    if (size > SIZE_MAX / sizeof(double))
+        return (matrix_t){0}; 
+
+    matrix_t w = {
+        .rows = rows, 
+        .cols = cols,
+        .size = size,
+        .data = malloc(size * sizeof(double))
+    };
+
+    if (w.data == NULL) 
+        return (matrix_t){0}; 
+
+    for (size_t i=0; i<w.size; ++i)
+        w.data[i] = ((double)rand() / RAND_MAX) * 0.2 - 0.1;
+    return w;
+}
+
+matrix_t zeros_matrix(size_t rows, size_t cols) {
+    if (rows == 0 || cols == 0 || rows > SIZE_MAX / cols)
+        return (matrix_t){0}; 
+
+    size_t size = rows * cols;
+    if (size > SIZE_MAX / sizeof(double))
+        return (matrix_t){0}; 
+
+    matrix_t w = {
+        .rows = rows, 
+        .cols = cols,
+        .size = size,
+        .data = calloc(size, sizeof(double))
+    };
+
+    if (w.data == NULL) 
+        return (matrix_t){0}; 
+
+    return w;
+}
+
+void free_matrix(matrix_t *m) {
+    if (m == NULL) 
+        return;
+
+    free(m->data);
+    *m = (matrix_t){0};
+}
+
+int add_layer(network_t *nn, size_t neurons, activation_fn afunc) {
+    if (nn == NULL) {
+        fprintf(stderr, "add_layer: Network not initialize\n");
+        return -1;
+    }
+
+    if (nn->layer_count == nn->capacity) {
+        size_t new_cap = nn->capacity == 0 ? 2 : nn->capacity * 2;
+
+        layer_t *new_layers = realloc(nn->layers, new_cap * sizeof(layer_t));
+        if (new_layers == NULL) {
+            fprintf(stderr, "add_layer: Layers failed to reallocate\n");
+        return -1;
+        }
+
+        nn->layers = new_layers;
+        nn->capacity = new_cap;
+    }
+
+    // Get the input size for the layer, from the prior layers output or input features
+    size_t input_size = nn->input_features;
+
+    if (nn->layer_count > 0)
+        input_size = nn->layers[nn->layer_count - 1].neurons;
+
+    // Add layer
+    layer_t *new_layer = &nn->layers[nn->layer_count];
+    if (layer_init(new_layer, input_size, neurons, afunc) < 0) { 
+        fprintf(stderr, "add_layer: Failed to create new layer\n");
+        return -1;
+    }
+    nn->layer_count++;
+    nn->output_classes = neurons;
+    nn->output_layer_idx = nn->layer_count - 1;
+    return 0;
+}
+
+int layer_init(layer_t *layer, size_t inputs, size_t neurons, activation_fn afunc) {
+    *layer = (layer_t){0};
+
+    layer->inputs = inputs;
+    layer->neurons = neurons; 
+    layer->activation = afunc;
+    layer->d_activation = get_dActivation(afunc);
+
+    layer->W = random_matrix(neurons, inputs); 
+    layer->bias = random_matrix(neurons, 1);
+    layer->dW = zeros_matrix(neurons, inputs);
+    layer->dB = zeros_matrix(neurons, 1);
+
+    if (layer->W.data == NULL || layer->bias.data == NULL || 
+            layer->dW.data == NULL || layer->dB.data == NULL ) {
+        free_matrix(&layer->W);
+        free_matrix(&layer->bias);
+        free_matrix(&layer->dW);
+        free_matrix(&layer->dB);
+        return -1;
+    }
+    return 0;
+}
+
+// TODO: Null check and enum these instead of if elsing a written list
+dActivation_fn get_dActivation(activation_fn afunc) {
+    if (afunc == sigmoid)
+        return d_sigmoid;
+    if (afunc == relu) 
+        return d_relu;
+    return NULL;
+}
+
+
+// Activation functions
+void relu(const double *z, double *a, size_t neurons) {
+    for (size_t neuron=0; neuron < neurons; ++neuron)
+        a[neuron] = z[neuron] < 0.0 ? 0.0 : z[neuron];
+}
+
+void sigmoid(const double *z, double *a, size_t neurons) {
+    for (size_t neuron=0; neuron<neurons; ++neuron) 
+        if (z[neuron] >= 0.0)
+            a[neuron] = 1 / ( 1+exp(-z[neuron]) );
+        else {
+            double e = exp(z[neuron]);
+            a[neuron] = e / (1.0 + e);
+        }
+}
+
+void softmax(const double *z, double *a, size_t neurons) {
+    double max_z = z[0];
+    double total_sum = 0.0;
+
+    for (size_t neuron=0; neuron<neurons; ++neuron)
+        if (z[neuron] > max_z)
+            max_z = z[neuron];
+
+    for (size_t neuron=0; neuron<neurons; ++neuron) {
+        a[neuron] = exp(z[neuron] - max_z);
+        total_sum += a[neuron];
+    }
+
+    for (size_t neuron=0; neuron<neurons; ++neuron)
+        a[neuron] /= total_sum;
+}
+
+double d_relu(double a) {
+    return a > 0.0 ? 1.0 : 0.0;
+}
+
+double d_sigmoid(double a) {
+    return a * (1.0 - a);
+}
+
+// TODO: this.
+void d_softmax() {}
+
+void cleanup(network_t *nn) {
+    if (nn == NULL) {
+        fprintf(stderr, "cleanup: Network is set to NULL\n");
+        return;
+    }
+
+    for (size_t i=0; i<nn->layer_count; ++i) {
+        free_matrix(&nn->layers[i].W);
+        free_matrix(&nn->layers[i].bias);
+        free_matrix(&nn->layers[i].dW);
+        free_matrix(&nn->layers[i].dB);
+    }
+
+    free(nn->layers);
+    nn->layers = NULL;
+    nn->layer_count = nn->capacity = 0;
+}
+
+void set_seed(network_t *nn, size_t seed) {
+    if (nn == NULL) {
+        fprintf(stderr, "set_seed: Network is set to NULL\n");
+        return;
+    }
+
+    nn->seed = seed;
+    srand(seed);
+}
+
+network_t neural_net(size_t features, double lr, size_t epochs, loss_fn loss) {
+    network_t nn = {
+    .layer_count      = 0,
+    .capacity         = 0,
+    .input_features   = features,
+    .output_classes   = 0,
+    .output_layer_idx = 0,
+    .learning_rate    = lr,
+    .seed             = (unsigned)time(NULL),
+    .epochs           = epochs,
+    .layers           = NULL,
+    .loss             = loss
+    };
+
+    srand(nn.seed); 
+    return nn;
+}
+
+
+
+
+
+
+
+
+
+
 
