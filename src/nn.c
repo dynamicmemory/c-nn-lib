@@ -13,6 +13,15 @@
 #include <time.h>
 #include <string.h>
 
+const loss_t BINARY_CROSS_ENTROPY = {
+    .value = binary_cross_entropy,
+    .gradient = binary_cross_entropy_gradient,
+};
+
+const loss_t CATEGORICAL_CROSS_ENTROPY = {
+    .value = categorical_cross_entropy,
+    .gradient = categorical_cross_entropy_gradient,
+};
 
 // Loss functions
 double binary_cross_entropy(layer_t layer, matrix_t y) {
@@ -21,12 +30,44 @@ double binary_cross_entropy(layer_t layer, matrix_t y) {
 
     for (size_t row=0; row<y.rows; ++row) {  
         double a = layer.a.data[row];
-        if (a < epsilon) a = epsilon;
-        if (a > 1.0 - epsilon) a = 1.0 - epsilon;
+        if (a < epsilon) 
+            a = epsilon;
+        if (a > 1.0 - epsilon) 
+            a = 1.0 - epsilon;
+
         loss -= y.data[row] * log(a) + (1.0 - y.data[row]) * log(1.0 - a); 
     }
-    loss /= y.rows;
-    return loss;
+    return loss / y.rows;
+}
+
+void binary_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
+    const double epsilon = 1e-15;
+    // const double m = (double)y.rows;
+
+    for (size_t row=0; row<y.rows; ++row) {
+        double a = layer.a.data[row];
+        if (a < epsilon) 
+            a = epsilon;
+        if (a > 1.0 - epsilon) 
+            a = 1.0 - epsilon;
+
+        dA->data[row] = -(y.data[row] / a - (1.0 - y.data[row]) / (1.0 - a));
+    }
+}
+
+void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
+    const double epsilon = 1e-15;
+    // const double m = (double)y.rows;
+    for (size_t row=0; row<y.rows; ++row) {
+        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
+            size_t idx = row * layer.neurons + neuron;
+            double a = layer.a.data[idx];
+            if (a < epsilon) 
+                a = epsilon;
+
+            dA->data[idx] = -y.data[idx] / a;
+        }
+    }
 }
 
 double categorical_cross_entropy(layer_t layer, matrix_t y) {
@@ -47,13 +88,15 @@ double categorical_cross_entropy(layer_t layer, matrix_t y) {
     return loss /y.rows;
 }
 
-
-void forward(layer_t *layer, matrix_t x) {
-    double *Z = calloc(layer->neurons, sizeof(double));
+int forward(layer_t *layer, matrix_t x) {
+    double *Z = malloc(layer->neurons * sizeof(double));
+    if (Z == NULL) { 
+        // fprintf(stderr, "forward: allocating Z matrix failed.\n");
+        return -1;
+    }
 
     for (size_t row=0; row<x.rows; ++row) {
         for (size_t neuron=0; neuron<layer->neurons; ++neuron) {
-            size_t a_idx = row * layer->neurons + neuron;
             double z = layer->bias.data[neuron];
 
             for (size_t input=0; input<layer->inputs; ++input) {
@@ -67,40 +110,56 @@ void forward(layer_t *layer, matrix_t x) {
         layer->activation(Z, &layer->a.data[row * layer->neurons], layer->neurons); 
     }
     free(Z);
+    return 0;
 }
 
-void backprop(network_t *nn, matrix_t x, matrix_t y) {
+// TODO: Create dZ and dA once, large enough for the largest layer, and free once at end
+int backprop(network_t *nn, matrix_t x, matrix_t y) {
     layer_t *layer = nn->layers;
 
     // Reset gradients 
     for (size_t i=0; i<nn->layer_count; ++i) {
-        memset(layer[i].dB.data, 0, layer[i].dB.rows * layer[i].dB.cols * sizeof(double));
-        memset(layer[i].dW.data, 0, layer[i].dW.rows * layer[i].dW.cols * sizeof(double));
+        memset(layer[i].dB.data, 0, layer[i].dB.size * sizeof(double));
+        memset(layer[i].dW.data, 0, layer[i].dW.size * sizeof(double));
     }
 
     matrix_t dZ = {0}, dA = {0};
     for (size_t i=nn->layer_count; i-->0; ) {
         dZ.rows = x.rows;
         dZ.cols = nn->layers[i].neurons;
-        dZ.data = malloc(dZ.rows * dZ.cols * sizeof(double));
+        dZ.size = dZ.rows * dZ.cols;
+        dZ.data = malloc(dZ.size * sizeof(double));
+
+        if (dZ.data == NULL) {
+            free(dA.data);
+            return -1;
+        }
 
         // Calculating dZ: if output layer, else hidden/input
-        if (i == nn->output_layer_idx)
-            for (size_t row=0; row<x.rows; ++row)
-                for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
-                    size_t dZ_idx = row * layer[i].neurons + neuron;
-                    // TODO: Assumption - bin/categorical cross entropy + sigmoid/softmax
-                    dZ.data[dZ_idx] = layer[i].a.data[dZ_idx] - y.data[dZ_idx];
-                }
-        else {
-            for (size_t row=0; row<x.rows; ++row)
-                for (size_t neuron=0; neuron<layer[i].neurons; ++neuron) {
-                    size_t dZ_idx = row * layer[i].neurons + neuron;
-                    size_t dA_idx = row * dA.cols + neuron;
-                    dZ.data[dZ_idx] = dA.data[dA_idx] * layer[i].d_activation(layer[i].a.data[dZ_idx]); 
-                }
-            free(dA.data);
+        if (i == nn->output_layer_idx) {
+            dA.rows = layer[i].a.rows;
+            dA.cols = layer[i].a.cols;
+            dA.size = layer[i].a.size;
+            dA.data = malloc(dA.size * sizeof(double));
+
+            if (dA.data == NULL) {
+                free(dZ.data);
+                return -1;
+            }
+
+            nn->loss.gradient(layer[i], y, &dA);
         }
+        // TODO: Fix up all these variable to simplify this loop
+        for (size_t row=0; row<x.rows; ++row) {
+            size_t dZ_idx = row * layer[i].neurons;
+            size_t dA_idx = row * dA.cols;
+            double *as = &layer[i].a.data[dZ_idx];
+            double *da = &dA.data[dA_idx];
+            double *dz = &dZ.data[dZ_idx];
+            layer[i].d_activation(as, da, dz, layer[i].neurons);
+        }
+        free(dA.data);
+        dA = (matrix_t){0};
 
         // Calculate dW: Input layer, else hidden/output
         matrix_t *input_ptr = (i==0) ? &x : &layer[i-1].a;
@@ -121,7 +180,13 @@ void backprop(network_t *nn, matrix_t x, matrix_t y) {
         if (i > 0) {
             dA.rows=x.rows;
             dA.cols=layer[i].W.cols;
+            dA.size = dA.rows * dA.cols;
             dA.data= calloc(dA.rows * dA.cols, sizeof(double));
+
+            if (dA.data == NULL) {
+                free(dZ.data);
+                return -1;
+            }
             
             for (size_t row=0; row<x.rows; ++row)
                 for (size_t neuron=0; neuron<layer[i].neurons; ++neuron)
@@ -138,11 +203,12 @@ void backprop(network_t *nn, matrix_t x, matrix_t y) {
 
     // TODO: Average the gradient losses to match our current loss function evaluation
     for (size_t i=0; i<nn->layer_count; ++i) {
-        for (size_t j = 0; j< layer[i].dW.cols * layer[i].dW.rows; ++j)
+        for (size_t j = 0; j< layer[i].dW.size; ++j)
             layer[i].dW.data[j] /= x.rows;
-        for (size_t j = 0; j< layer[i].dB.cols * layer[i].dB.rows; ++j)
+        for (size_t j = 0; j< layer[i].dB.size; ++j)
             layer[i].dB.data[j] /= x.rows;
     }
+    return 0;
 }
 
 void update_weights_bias(network_t *nn) {
@@ -174,7 +240,8 @@ void train(network_t *nn, matrix_t x, matrix_t y){
             input = &layer[i].a;
         }
 
-        loss = nn->loss(layer[nn->output_layer_idx], y);
+        // loss = nn->old_loss(layer[nn->output_layer_idx], y);
+        loss = nn->loss.value(layer[nn->output_layer_idx], y);
         backprop(nn, x, y);
         update_weights_bias(nn);
 
@@ -198,6 +265,7 @@ void allocate_activations(layer_t *layer, matrix_t inputs) {
 
     layer->a.rows = inputs.rows;
     layer->a.cols = layer->neurons;
+    layer->a.size = layer->a.rows * layer->a.cols;
     layer->a.data = malloc(layer->a.rows * layer->a.cols * sizeof(double));
 }
 
@@ -404,6 +472,9 @@ dActivation_fn get_dActivation(activation_fn afunc) {
         return d_sigmoid;
     if (afunc == relu) 
         return d_relu;
+    if (afunc == softmax) 
+        return d_softmax;
+
     return NULL;
 }
 
@@ -441,16 +512,36 @@ void softmax(const double *z, double *a, size_t neurons) {
         a[neuron] /= total_sum;
 }
 
-double d_relu(double a) {
-    return a > 0.0 ? 1.0 : 0.0;
-}
+// double d_relu(double a) {
+//     return a > 0.0 ? 1.0 : 0.0;
+// }
 
-double d_sigmoid(double a) {
-    return a * (1.0 - a);
-}
+// double d_sigmoid(double a) {
+//     return a * (1.0 - a);
+// }
 
 // TODO: this.
-void d_softmax() {}
+// void d_softmax() {}
+
+// TODO: I question the returns here... do i really need to? 
+void d_relu(const double *a, const double *dA, double *dZ, size_t n){ 
+    for (size_t i=0; i<n; ++i) 
+        dZ[i] = a[i] > 0.0 ? dA[i] : 0.0;
+}
+
+void d_sigmoid(const double *a, const double *dA, double *dZ, size_t n) {
+    for (size_t i=0; i<n; ++i) 
+        dZ[i] = dA[i] * a[i] * (1.0 - a[i]);
+}
+
+void d_softmax(const double *a, const double *dA, double *dZ, size_t n) {
+    double dot = 0.0;
+    for (size_t i=0; i<n; ++i)
+        dot += a[i] * dA[i];
+
+    for (size_t i=0; i<n; ++i) 
+        dZ[i] = a[i] * (dA[i] - dot);
+}
 
 void cleanup(network_t *nn) {
     if (nn == NULL) {
@@ -480,7 +571,8 @@ void set_seed(network_t *nn, size_t seed) {
     srand(seed);
 }
 
-network_t neural_net(size_t features, double lr, size_t epochs, loss_fn loss) {
+// network_t neural_net(size_t features, double lr, size_t epochs, loss_fn loss) {
+network_t neural_net(size_t features, double lr, size_t epochs, loss_t loss) {
     network_t nn = {
     .layer_count      = 0,
     .capacity         = 0,
@@ -491,20 +583,11 @@ network_t neural_net(size_t features, double lr, size_t epochs, loss_fn loss) {
     .seed             = (unsigned)time(NULL),
     .epochs           = epochs,
     .layers           = NULL,
-    .loss             = loss
+    .loss             = loss 
     };
 
     srand(nn.seed); 
     return nn;
 }
-
-
-
-
-
-
-
-
-
 
 

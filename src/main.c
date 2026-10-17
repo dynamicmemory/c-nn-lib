@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
         y_small.data[i] = y_train.data[i];
 
     printf("Samples: %d\nEpochs: %d\nlr: %f\n", n, epochs, lr);
-    network_t nn = neural_net(x_small.cols, lr, epochs, categorical_cross_entropy);
+    network_t nn = neural_net(x_small.cols, lr, epochs, CATEGORICAL_CROSS_ENTROPY);
     set_seed(&nn, 69);
     int l1 = add_layer(&nn, 32, relu);
     int l2 = add_layer(&nn, y_small.cols, softmax);

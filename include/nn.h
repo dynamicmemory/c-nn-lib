@@ -58,7 +58,8 @@ void free_matrix(matrix_t *m);
 
 /* Function pointer types */
 typedef void (*activation_fn)(const double *z, double *a, size_t n);
-typedef double (*dActivation_fn)(double a);
+// typedef double (*dActivation_fn)(double a);
+typedef void (*dActivation_fn)(const double *a, const double *dA, double *dZ, size_t n);
 
 /* Represents a neural network layer, including its trainable parameters, 
  * gradients, activations, and activation functions.
@@ -91,7 +92,15 @@ typedef struct {
 
 /* Loss function */
 typedef double (*loss_fn)(layer_t layer, matrix_t y);
+typedef void (*loss_gradient_fn)(layer_t layer, matrix_t y, matrix_t *dA);
 
+typedef struct {
+    loss_fn value;
+    loss_gradient_fn gradient;
+} loss_t;
+
+extern const loss_t BINARY_CROSS_ENTROPY;
+extern const loss_t CATEGORICAL_CROSS_ENTROPY;
 /* 
  * Represents a neural network object, including its layers, training details 
  * loss function, and dynamically assigned layers
@@ -117,7 +126,7 @@ typedef struct {
     size_t epochs;
     size_t seed;
 
-    loss_fn loss;
+    loss_t loss;
     layer_t *layers;
 
 } network_t;
@@ -137,7 +146,7 @@ typedef struct {
  *   loss:     Loss function used to evaluate predicitons
 */
 network_t neural_net(size_t features, double lr,
-        size_t epochs, loss_fn loss);
+        size_t epochs, loss_t loss);
 
 /*
  * Releases resources owned by the network, including layer parameters, 
@@ -230,7 +239,8 @@ void softmax(const double *z, double *a, size_t n);
  * Returns:
  *  1.0 if a > 0.0, otherwise 0.0
 */
-double d_relu(double a);
+// double d_relu(double a);
+void d_relu(const double *a, const double *dA, double *dZ, size_t n);
 /*
  * Computes the sigmoid derivative using the activation value
  *
@@ -240,22 +250,54 @@ double d_relu(double a);
  * Returns:
  *   the activated value of the input 'a' ~ a * (1.0 - a)
 */
-double d_sigmoid(double a);
+// double d_sigmoid(double a);
+void d_sigmoid(const double *a, const double *dA, double *dZ, size_t n);
 
 /*
  * TODO: Determine the suitable interface, Not implemented currently 
  * NULL
 */
-void d_softmax(void);
+// void d_softmax(void);
+void d_softmax(const double *a, const double *dA, double *dZ, size_t n);
 
 
-/* Losses */
+
+/* 
+ * TODO: Still resolving function 
+ */
 double binary_cross_entropy(layer_t layer, matrix_t y);
+
+/* 
+ * TODO: Still resolving function 
+ */
 double categorical_cross_entropy(layer_t layer, matrix_t y);
 
-/* Forward and backward propagation */
-void forward(layer_t *layer, matrix_t x);
-void backprop(network_t *nn, matrix_t x, matrix_t y);
+/* 
+ * TODO: Still resolving function 
+ */
+void binary_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA);
+
+/* 
+ * TODO: Still resolving function 
+ */
+void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA);
+
+/* 
+ * Performs the forward pass for a single layer for the neural net. Calculates 
+ * the weighted sum of the inputs plus bias for each neuron, then applies the  
+ * activation function. 
+ *
+ * Params:
+ *   layer: Ponter to the layer being evaluated
+ *   x:     Input matrix with one sample per row and one feature per column
+ *
+ * Returns: 
+ *   0 on success and -1 if memory failed to allocate for the Z scores
+ */
+int forward(layer_t *layer, matrix_t x);
+
+
+int backprop(network_t *nn, matrix_t x, matrix_t y);
 void update_weights_bias(network_t *nn);
 void allocate_activations(layer_t *layer, matrix_t inputs);
 void free_activations(network_t *nn);

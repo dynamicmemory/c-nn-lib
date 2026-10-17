@@ -63,9 +63,8 @@ void binary_test() {
 
     int features = x.cols;
 
-    network_t nn = neural_net(features, 0.01, 10000, binary_cross_entropy);
-    add_layer(&nn, 4, relu);
-    add_layer(&nn, 4, relu);
+    network_t nn = neural_net(features, 0.1, 300, BINARY_CROSS_ENTROPY);
+    add_layer(&nn, 10, relu);
     add_layer(&nn, 1, sigmoid);
 
     train(&nn, x, y);
@@ -95,10 +94,9 @@ void multiclass_test() {
     matrix_t y = create_multiclass_labels();
     size_t features = x.cols;
 
-    network_t nn = neural_net(features, 0.01, 10000, categorical_cross_entropy);
+    network_t nn = neural_net(features, 0.1, 300, CATEGORICAL_CROSS_ENTROPY);
     add_layer(&nn, 10, relu);
     add_layer(&nn, 10, relu);
-    add_layer(&nn, 5, relu);
     add_layer(&nn, 3, softmax);
 
     train(&nn, x, y);
