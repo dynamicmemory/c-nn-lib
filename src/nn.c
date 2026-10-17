@@ -13,81 +13,6 @@
 #include <time.h>
 #include <string.h>
 
-const loss_t BINARY_CROSS_ENTROPY = {
-    .value = binary_cross_entropy,
-    .gradient = binary_cross_entropy_gradient,
-};
-
-const loss_t CATEGORICAL_CROSS_ENTROPY = {
-    .value = categorical_cross_entropy,
-    .gradient = categorical_cross_entropy_gradient,
-};
-
-// Loss functions
-double binary_cross_entropy(layer_t layer, matrix_t y) {
-    double loss = 0.0;
-    double epsilon = 1e-15;
-
-    for (size_t row=0; row<y.rows; ++row) {  
-        double a = layer.a.data[row];
-        if (a < epsilon) 
-            a = epsilon;
-        if (a > 1.0 - epsilon) 
-            a = 1.0 - epsilon;
-
-        loss -= y.data[row] * log(a) + (1.0 - y.data[row]) * log(1.0 - a); 
-    }
-    return loss / y.rows;
-}
-
-void binary_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
-    const double epsilon = 1e-15;
-    // const double m = (double)y.rows;
-
-    for (size_t row=0; row<y.rows; ++row) {
-        double a = layer.a.data[row];
-        if (a < epsilon) 
-            a = epsilon;
-        if (a > 1.0 - epsilon) 
-            a = 1.0 - epsilon;
-
-        dA->data[row] = -(y.data[row] / a - (1.0 - y.data[row]) / (1.0 - a));
-    }
-}
-
-void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
-    const double epsilon = 1e-15;
-    // const double m = (double)y.rows;
-    for (size_t row=0; row<y.rows; ++row) {
-        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
-            size_t idx = row * layer.neurons + neuron;
-            double a = layer.a.data[idx];
-            if (a < epsilon) 
-                a = epsilon;
-
-            dA->data[idx] = -y.data[idx] / a;
-        }
-    }
-}
-
-double categorical_cross_entropy(layer_t layer, matrix_t y) {
-    double loss = 0.0;
-    const double epsilon = 1e-15;
-
-    for (size_t row=0; row<y.rows; ++row)
-        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
-            size_t idx = row * layer.neurons + neuron;
-
-            if (y.data[idx] != 0.0) {
-                double a = layer.a.data[idx];
-                if (a < epsilon) a = epsilon;
-
-                loss -= y.data[idx] * log(a);
-            }
-        }
-    return loss /y.rows;
-}
-
 int forward(layer_t *layer, matrix_t x) {
     double *Z = malloc(layer->neurons * sizeof(double));
     if (Z == NULL) { 
@@ -447,14 +372,16 @@ int layer_init(layer_t *layer, size_t inputs, size_t neurons, activation_fn afun
 
     layer->inputs = inputs;
     layer->neurons = neurons; 
+
     layer->activation = afunc;
     layer->d_activation = get_dActivation(afunc);
+    if (layer->activation == NULL || layer->d_activation == NULL) 
+        return -1;
 
     layer->W = random_matrix(neurons, inputs); 
     layer->bias = random_matrix(neurons, 1);
     layer->dW = zeros_matrix(neurons, inputs);
     layer->dB = zeros_matrix(neurons, 1);
-
     if (layer->W.data == NULL || layer->bias.data == NULL || 
             layer->dW.data == NULL || layer->dB.data == NULL ) {
         free_matrix(&layer->W);
@@ -466,7 +393,7 @@ int layer_init(layer_t *layer, size_t inputs, size_t neurons, activation_fn afun
     return 0;
 }
 
-// TODO: Null check and enum these instead of if elsing a written list
+// TODO: enum these instead of if elsing a written list
 dActivation_fn get_dActivation(activation_fn afunc) {
     if (afunc == sigmoid)
         return d_sigmoid;
@@ -512,18 +439,6 @@ void softmax(const double *z, double *a, size_t neurons) {
         a[neuron] /= total_sum;
 }
 
-// double d_relu(double a) {
-//     return a > 0.0 ? 1.0 : 0.0;
-// }
-
-// double d_sigmoid(double a) {
-//     return a * (1.0 - a);
-// }
-
-// TODO: this.
-// void d_softmax() {}
-
-// TODO: I question the returns here... do i really need to? 
 void d_relu(const double *a, const double *dA, double *dZ, size_t n){ 
     for (size_t i=0; i<n; ++i) 
         dZ[i] = a[i] > 0.0 ? dA[i] : 0.0;
@@ -590,4 +505,77 @@ network_t neural_net(size_t features, double lr, size_t epochs, loss_t loss) {
     return nn;
 }
 
+// Loss confgurations
+const loss_t BINARY_CROSS_ENTROPY = {
+    .value = binary_cross_entropy,
+    .gradient = binary_cross_entropy_gradient,
+};
 
+const loss_t CATEGORICAL_CROSS_ENTROPY = {
+    .value = categorical_cross_entropy,
+    .gradient = categorical_cross_entropy_gradient,
+};
+
+// Loss functions
+double binary_cross_entropy(layer_t layer, matrix_t y) {
+    double loss = 0.0;
+    double epsilon = 1e-15;
+
+    for (size_t row=0; row<y.rows; ++row) {  
+        double a = layer.a.data[row];
+        if (a < epsilon) 
+            a = epsilon;
+        if (a > 1.0 - epsilon) 
+            a = 1.0 - epsilon;
+
+        loss -= y.data[row] * log(a) + (1.0 - y.data[row]) * log(1.0 - a); 
+    }
+    return loss / y.rows;
+}
+
+void binary_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
+    const double epsilon = 1e-15;
+
+    for (size_t row=0; row<y.rows; ++row) {
+        double a = layer.a.data[row];
+        if (a < epsilon) 
+            a = epsilon;
+        if (a > 1.0 - epsilon) 
+            a = 1.0 - epsilon;
+
+        dA->data[row] = -(y.data[row] / a - (1.0 - y.data[row]) / (1.0 - a));
+    }
+}
+
+double categorical_cross_entropy(layer_t layer, matrix_t y) {
+    double loss = 0.0;
+    const double epsilon = 1e-15;
+
+    for (size_t row=0; row<y.rows; ++row)
+        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
+            size_t idx = row * layer.neurons + neuron;
+
+            if (y.data[idx] != 0.0) {
+                double a = layer.a.data[idx];
+                if (a < epsilon) a = epsilon;
+
+                loss -= y.data[idx] * log(a);
+            }
+        }
+    return loss /y.rows;
+}
+
+void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA) {
+    const double epsilon = 1e-15;
+
+    for (size_t row=0; row<y.rows; ++row) {
+        for (size_t neuron=0; neuron<layer.neurons; ++neuron) {
+            size_t idx = row * layer.neurons + neuron;
+            double a = layer.a.data[idx];
+            if (a < epsilon) 
+                a = epsilon;
+
+            dA->data[idx] = -y.data[idx] / a;
+        }
+    }
+}

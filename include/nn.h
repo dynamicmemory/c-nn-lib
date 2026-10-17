@@ -90,17 +90,29 @@ typedef struct {
 
 
 
-/* Loss function */
+/* Loss functions */
 typedef double (*loss_fn)(layer_t layer, matrix_t y);
 typedef void (*loss_gradient_fn)(layer_t layer, matrix_t y, matrix_t *dA);
 
+/*
+ * Represents the loss for the network with two functions 
+ * 
+ * loss_fn calculates the double value scaler loss of the network 
+ * loss_gradient_fn calculates the gradient of the loss with respect to the 
+ * output activation.
+ *
+ * The loss gradient function does no average across samples, it is left to the 
+ * caller to handle i.e backprop 
+ */
 typedef struct {
     loss_fn value;
     loss_gradient_fn gradient;
 } loss_t;
 
+/* Built in loss function configurations*/
 extern const loss_t BINARY_CROSS_ENTROPY;
 extern const loss_t CATEGORICAL_CROSS_ENTROPY;
+
 /* 
  * Represents a neural network object, including its layers, training details 
  * loss function, and dynamically assigned layers
@@ -231,10 +243,13 @@ void sigmoid(const double *z, double *a, size_t n);
 void softmax(const double *z, double *a, size_t n);
 
 /*
- * Computes the ReLu derivative using the activation value
+ * Computes the ReLu derivative to an incoming gradient 
  *
  * Params:
- *   a: activation value
+ *   a: activation values from the forward pass
+ *   dA: the loss gradients w.r.t the 'a' values
+ *   dZ: the storage for how much the loss changes w.r.t the pre activation values
+ *   n: the number of neurons in current sample
  *
  * Returns:
  *  1.0 if a > 0.0, otherwise 0.0
@@ -245,7 +260,10 @@ void d_relu(const double *a, const double *dA, double *dZ, size_t n);
  * Computes the sigmoid derivative using the activation value
  *
  * Params:
- *   a: activation value
+ *   a: activation values from the forward pass
+ *   dA: the loss gradients w.r.t the 'a' values
+ *   dZ: the storage for how much the loss changes w.r.t the pre activation values
+ *   n: the number of neurons in current sample
  *
  * Returns:
  *   the activated value of the input 'a' ~ a * (1.0 - a)
@@ -254,31 +272,64 @@ void d_relu(const double *a, const double *dA, double *dZ, size_t n);
 void d_sigmoid(const double *a, const double *dA, double *dZ, size_t n);
 
 /*
- * TODO: Determine the suitable interface, Not implemented currently 
- * NULL
+ * Computes the softmax matrix-vector product using the activation value
+ *
+ * Params:
+ *   a: activation values from the forward pass
+ *   dA: the loss gradients w.r.t the 'a' values
+ *   dZ: the storage for how much the loss changes w.r.t the pre activation values
+ *   n: the number of neurons in current sample
+ *
+ * Returns:
+ *   the activated value of the input 'a' ~ a * (1.0 - a)
 */
 // void d_softmax(void);
 void d_softmax(const double *a, const double *dA, double *dZ, size_t n);
 
 
-
-/* 
- * TODO: Still resolving function 
+/*
+ * Computes binary cross entropy for a single output binary classification 
+ * task, averages across the samples
+ * 
+ * Params: 
+ *   layer: output layer to calculate loss for  
+ *   y: the sample labels 
+ *
+ * Returns: 
+ *    the loss for the network
  */
 double binary_cross_entropy(layer_t layer, matrix_t y);
 
 /* 
- * TODO: Still resolving function 
+ * Computes categorical cross entropy for a mutliclass classification 
+ * task, averages across the samples.
+ *
+ * Params: 
+ *   layer: output layer to calculate loss for  
+ *   y: the sample labels 
+ * 
+ * Returns: 
+ *    the loss for the network
  */
 double categorical_cross_entropy(layer_t layer, matrix_t y);
 
 /* 
- * TODO: Still resolving function 
+ * Computes the binary cross entropy loss gradient w.r.t the output activations 
+ * writing the dL/dA into dA
+ *
+ * Params: 
+ *   layer: output layer to calculate loss for  
+ *   y: the sample labels 
  */
 void binary_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA);
 
 /* 
- * TODO: Still resolving function 
+ * Computes the categorical cross entropy loss gradient w.r.t output activations 
+ * writing the dL/dA into dA
+ *
+ * Params: 
+ *   layer: output layer to calculate loss for  
+ *   y: the sample labels 
  */
 void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA);
 
@@ -296,7 +347,22 @@ void categorical_cross_entropy_gradient(layer_t layer, matrix_t y, matrix_t *dA)
  */
 int forward(layer_t *layer, matrix_t x);
 
-
+/*
+ * Performs back propagation to calculate the loss and gradient updates needed 
+ * for the bias and weights of the network.
+ * Starts by calculating the loss w.r.t the output layers activation and the 
+ * target values, works its way through each layer calculating the prior layers 
+ * dA values all the way to the input layer. Averages out all losses over the 
+ * input batch size
+ *
+ * Params:
+ *   nn - the neural network whose layer gradients will be calculated
+ *   x - input samples
+ *   y - target labels for the x samples
+ *
+ * Returns:
+ *   0 on success or -1 on memory allocation failure
+*/
 int backprop(network_t *nn, matrix_t x, matrix_t y);
 void update_weights_bias(network_t *nn);
 void allocate_activations(layer_t *layer, matrix_t inputs);
