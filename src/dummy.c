@@ -67,20 +67,20 @@ void binary_test() {
     add_layer(&nn, 10, relu);
     add_layer(&nn, 1, sigmoid);
 
-    train(&nn, x, y);
+    train(&nn, x, y, 1e-8, 1);
     binary_evaluator(&nn, x, y);
 
     // TODO: Consider an easier way for a user to construct predictions
     double new_x[] = {2,1,1,2,3,1};
     matrix_t m = {.rows = 1, .cols = features, .data = new_x};
-    double preds[1];
-    predict(&nn, m, preds);
+    matrix_t preds = {0};
+    predict(&nn, m, &preds);
 
     size_t best = 0;
     for (size_t i=0; i<nn.output_classes; ++i)
-        if (preds[i] > best)
+        if (preds.data[i] > best)
             best = i;
-    printf("For 2,1,1,2,3,1, network predicted: %d\n", preds[best] > 0.5 ? 1 : 0);
+    printf("For 2,1,1,2,3,1, network predicted: %d\n", preds.data[best] > 0.5 ? 1 : 0);
 
     cleanup(&nn);
     free_matrix(&x);
@@ -99,20 +99,20 @@ void multiclass_test() {
     add_layer(&nn, 10, relu);
     add_layer(&nn, 3, softmax);
 
-    train(&nn, x, y);
+    train(&nn, x, y, 1e-8, 1);
     evaluate(&nn, x, y);
 
     // TODO: Consider an easier way for a user to construct predictions
     double new_x[] = {5,5,5,6,7,4};
     matrix_t m = {.rows = 1, .cols = features, .data = new_x};
-    double preds[nn.output_classes];
-    predict(&nn, m, preds);
+    matrix_t preds = {0};
+    predict(&nn, m, &preds);
 
     size_t best = 0;
     for (size_t i=0; i<m.rows * nn.output_classes; ++i) {
-        if (preds[i] > preds[best])
+        if (preds.data[i] > preds.data[best])
             best = i;
-        printf("preds[%zu]: %f, best idx: %zu | val %f\n", i, preds[i], best, preds[best]);
+        printf("preds[%zu]: %f, best idx: %zu | val %f\n", i, preds.data[i], best, preds.data[best]);
     }
     printf("For 5,5,5,6,7,4 network predicted: %zu\n", best);
 

@@ -84,9 +84,6 @@ matrix_t load_mnist_images(const char *path) {
         return x;
     }
 
-    fclose(file);
-
-
     x.data = malloc((size_t)samples*rows*cols*sizeof(double));
     if (x.data == NULL) {
         printf("load_mnist_images: Failed to allocate matrix\n");
@@ -101,7 +98,7 @@ matrix_t load_mnist_images(const char *path) {
     for (size_t i=0; i<x.size; ++i) 
         x.data[i] = pixels[i] / 255.0;
     free(pixels);
-
+    fclose(file);
     return x;
 }
 
@@ -132,12 +129,6 @@ matrix_t load_mnist_labels(const char *path) {
         return y;
     }
 
-    if ((size_t)n_labels > SIZE_MAX / sizeof(double) / 10) {
-        fprintf(stderr, "load_mnist_labels: Matrix size allocation overflowed\n");
-        fclose(file);
-        return y;
-    }
-
     unsigned char *labels = malloc((size_t)n_labels * sizeof(*labels));
     if (labels == NULL) {
         fprintf(stderr, "load_mnist_labels: Failed to allocate label memory\n");
@@ -152,8 +143,6 @@ matrix_t load_mnist_labels(const char *path) {
         fclose(file);
         return y;
     }
-
-    fclose(file);
 
     y.rows = n_labels;
     y.cols = 10;
@@ -171,6 +160,7 @@ matrix_t load_mnist_labels(const char *path) {
         y.data[i*y.cols + labels[i]] = 1.0;
 
     free(labels);
+    fclose(file);
     return y;
 }
 

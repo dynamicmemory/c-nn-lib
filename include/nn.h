@@ -121,6 +121,7 @@ extern const loss_t CATEGORICAL_CROSS_ENTROPY;
  * capacity: Number of layers the network can currently hold
  * input_features: Number of input features from the training data
  * output_classes: Number of classes or labels in the data
+ * max_neurons: the maximum neurons of a single layer in the network
  * learning_rate: Networks learning rate
  * epochs: Number of epochs to train the network on
  * layers: dynamically allocated double array of network layers
@@ -133,6 +134,7 @@ typedef struct {
     size_t output_classes;
 
     size_t output_layer_idx;
+    size_t max_neurons;
 
     double learning_rate;
     size_t epochs;
@@ -364,13 +366,68 @@ int forward(layer_t *layer, matrix_t x);
  *   0 on success or -1 on memory allocation failure
 */
 int backprop(network_t *nn, matrix_t x, matrix_t y);
+
+
+/* Updates the networks weights and bias using the accumulated gradients after 
+ * backprop has finished. 
+ * 
+ * Params: 
+ *   nn - Network containing the parameterr, grads, and learning rate
+ * 
+ */
 void update_weights_bias(network_t *nn);
-void allocate_activations(layer_t *layer, matrix_t inputs);
+
+/*
+ * Allocates the activation matrix for a layer based on its input batch 
+ * 
+ * Params: 
+ *   layer - Layer whose activation matrix will be allocated for 
+ *   inputs - input matrix used to determine the batch row count
+ *    
+ * Returns:    
+ *    0 on success, -1 on allocation failure
+ */
+int allocate_activations(layer_t *layer, matrix_t inputs);
+
+/* 
+ * Free the activation buffers belonging to all network layers 
+ * 
+ * Params: 
+ *   nn - Network containing layer activations to be freed
+ */
 void free_activations(network_t *nn);
 
-/* Training, evaluation and prediction */
-void train(network_t *nn, matrix_t x, matrix_t y);
+/* 
+ * Trains a model using the supplied input and target data
+ * 
+ * Params: 
+ *   nn - Network to train
+ *   x - Input samples, with one sample per row 
+ *   y - Target values corresponding to the samples in x (multiclass must be one 
+ *       hot encoded, binary can be 0, 1 single column vector)
+ *   tol - Absolute loss-change tolerance used as the early-stopping threshold, 
+ *         (set to 0 if you want all epochs to run)
+ *   verbose - If nonzero, will print epochs and loss during training.
+ * 
+ * Returns:  
+ *   0 on success, or -1 on training failure
+ */
+int train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose);
+
 void evaluate(network_t *nn, matrix_t x, matrix_t y);
 void binary_evaluator(network_t *nn, matrix_t x, matrix_t y);
-void predict(network_t *nn, matrix_t m, double *preds);
+
+/*
+ * Generates predictions for a batch of input samples 1 - n, runs forward prop 
+ * and copies the output layer activations into a newly allocated preds matrix 
+ * 
+ * Params:
+ *   nn - network used to gen preds 
+ *   x - input matrix, shaped (samples * features)
+ *   preds - matrix where all predictions made are stored
+ *
+ * Returns: 
+ *   0 on succes and -1 on failure
+*/
+int predict(network_t *nn, matrix_t m, matrix_t *preds);
 #endif

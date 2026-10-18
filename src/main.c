@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int main(int argc, char *argv[]) {
+int main(void) {
     // binary_test();
     // multiclass_test();
     char mnist_images[] = "./data/mnist/train-images-idx3-ubyte";
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    train(&nn, x_small, y_small);
+    train(&nn, x_small, y_small, 1e-8, 1);
     printf("Train set ");
     evaluate(&nn, x_small, y_small);
     printf("Test set ");
