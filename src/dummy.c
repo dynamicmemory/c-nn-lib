@@ -68,7 +68,11 @@ void binary_test() {
     add_layer(&nn, 1, sigmoid);
 
     train(&nn, x, y, 1e-8, 1);
-    binary_evaluator(&nn, x, y);
+    evaluate_t eval;
+    evaluate(&nn, x, y, &eval, 0.5);
+    print_confusion_matrix(eval.confusion);
+    print_metrics(&eval);
+    // binary_evaluator(&nn, x, y);
 
     // TODO: Consider an easier way for a user to construct predictions
     double new_x[] = {2,1,1,2,3,1};
@@ -100,7 +104,7 @@ void multiclass_test() {
     add_layer(&nn, 3, softmax);
 
     train(&nn, x, y, 1e-8, 1);
-    evaluate(&nn, x, y);
+    // evaluate(&nn, x, y);
 
     // TODO: Consider an easier way for a user to construct predictions
     double new_x[] = {5,5,5,6,7,4};

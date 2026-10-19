@@ -28,8 +28,8 @@ int main(void) {
 
     // mnist_print_sample(&x_train, &y_train, 1990);
     // Create a subset to test with 
-    int n = 100;
-    int epochs = 50;
+    int n = 1000;
+    int epochs = 20;
     double lr = 0.2;
 
     matrix_t x_small = {
@@ -61,9 +61,18 @@ int main(void) {
 
     train(&nn, x_small, y_small, 1e-8, 1);
     printf("Train set ");
-    evaluate(&nn, x_small, y_small);
+    evaluate_t eval;
+    if (evaluate(&nn, x_small, y_small, &eval, 0.5) == 0) {
+        print_confusion_matrix(eval.confusion);
+        print_metrics(&eval);
+        free_evaluate(&eval);
+    }
     printf("Test set ");
-    evaluate(&nn, x_test, y_test);
+    if (evaluate(&nn, x_test, y_test, &eval, 0.5) == 0) {
+        print_confusion_matrix(eval.confusion);
+        print_metrics(&eval);
+        free_evaluate(&eval);
+    }
 
     free(x_train.data);
     free(y_train.data);
