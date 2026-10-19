@@ -28,9 +28,9 @@ int main(void) {
 
     // mnist_print_sample(&x_train, &y_train, 1990);
     // Create a subset to test with 
-    int n = 1000;
-    int epochs = 20;
-    double lr = 0.2;
+    int n = 60000;
+    int epochs = 200;
+    double lr = 0.4;
 
     matrix_t x_small = {
         .rows = n,
@@ -49,6 +49,7 @@ int main(void) {
     for (size_t i=0; i<y_small.size; ++i)
         y_small.data[i] = y_train.data[i];
 
+
     printf("Samples: %d\nEpochs: %d\nlr: %f\n", n, epochs, lr);
     network_t nn = neural_net(x_small.cols, lr, epochs, CATEGORICAL_CROSS_ENTROPY);
     set_seed(&nn, 69);
@@ -60,6 +61,9 @@ int main(void) {
     }
 
     train(&nn, x_small, y_small, 1e-8, 1);
+
+    printf("Samples: %d\nEpochs: %d\nlr: %f\n", n, epochs, lr);
+
     printf("Train set ");
     evaluate_t eval;
     if (evaluate(&nn, x_small, y_small, &eval, 0.5) == 0) {

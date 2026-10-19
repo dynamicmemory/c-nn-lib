@@ -2,6 +2,8 @@
 // TODO: weight decay regularization param for a
 // TODO: Fix consts throughout the project
 // TODO: setup error code enum to propagate correct errors
+// TODO: Consider throwing a validation set into train with a NULL check if you dont want it
+// TODO: Multithreaded solution to improve performance
 #include "nn.h"
 
 #include <stdio.h>
@@ -163,7 +165,7 @@ void print_confusion_matrix(matrix_t confusion) {
 
         for (size_t col=0; col < confusion.cols; ++col) {
             double value = confusion.data[row * confusion.cols + col];
-            double intensity = max > 0.0 ? value / max : 0.0;
+            double intensity = max > 0.0 ? sqrt(value / max) : 0.0;
             int r, g, b;
 
             /* Darker blue for higher counts. */
