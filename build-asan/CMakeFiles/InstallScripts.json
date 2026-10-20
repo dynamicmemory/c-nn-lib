@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/lenny/projects/neuralnet-c/build-asan/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
