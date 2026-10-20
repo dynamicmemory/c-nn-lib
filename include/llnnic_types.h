@@ -108,10 +108,11 @@ typedef struct {
     double learning_rate;
     size_t epochs;
     size_t seed;
+    size_t threads;
 
     loss_t loss;
     layer_t *layers;
-
+    
 } network_t;
 
 

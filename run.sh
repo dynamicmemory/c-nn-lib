@@ -2,6 +2,6 @@
 set -euo pipefail
 
 cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --target neuronc
+cmake --build build --target llnnic 
 
-exec ./build/neuronc "$@"
+exec ./build/llnnic "$@"

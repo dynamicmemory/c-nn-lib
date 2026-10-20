@@ -33,6 +33,7 @@ network_t neural_net(size_t features, double lr, size_t epochs, loss_t loss) {
     .learning_rate    = lr,
     .seed             = (unsigned)time(NULL),
     .epochs           = epochs,
+    .threads          = 1,
     .layers           = NULL,
     .loss             = loss 
     };

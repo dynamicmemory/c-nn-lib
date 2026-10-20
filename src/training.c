@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "training.h"
 #include "llnnic_internal.h"
 
@@ -9,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /*
  * Internal backprop helper function
@@ -227,7 +230,57 @@ void update_weights_bias(network_t *nn) {
         }
 }
 
+// TODO: New for parallel implementation
+int serial_train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose);
+int parallel_train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose);
+int split_data(matrix_t x, matrix_t y, size_t threads);
+void *worker(void *args);
+
 int train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose){
+    int e;
+    if (nn->threads > 1)
+        e = parallel_train(nn, x, y ,tol, verbose);
+    else 
+        e = serial_train(nn, x, y, tol, verbose);
+
+    // TODO: Could just retrun the function itself? same thing
+    return e;
+}
+
+
+int parallel_train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose) {
+    pthread_t tid[nn->threads];
+    size_t i;
+
+    // Initialize barrier 
+    pthread_barrier_t barrier;
+    pthread_barrier_init(&barrier, NULL, nn->threads);
+
+    for (i=0; i<nn->threads; ++i)
+        pthread_create(&tid[i], NULL, worker, NULL);
+    for (i=0; i<nn->threads; ++i)
+        pthread_join(tid[i], NULL);
+
+    return 0;
+}
+
+void *worker(void *args) {
+    // Split the data 
+
+    // Copy memory buffers / set up each threads matrix information it will use? 
+
+    // Train loop 
+      // Do work 
+      // Sync
+      // Update weights 
+      // Sync
+
+
+    pthread_exit(NULL);
+}
+
+// TODO: New for parallel implementation
+int serial_train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose) {
     double prior_loss = INFINITY;
     double loss, delta, change;
     layer_t *layer = nn->layers;
@@ -259,7 +312,9 @@ int train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose){
     }
     free_activations(nn);
     return 0;
+
 }
+
 
 int allocate_activations(layer_t *layer, matrix_t inputs) {
     if (layer->a.data != NULL)

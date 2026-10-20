@@ -2,14 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(neuronc)
+project(llnnic)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
 
-add_executable(neuronc 
+add_executable(llnnic
     src/network.c 
     src/activation.c 
     src/evaluation.c 
@@ -22,17 +23,20 @@ add_executable(neuronc
     src/dummy.c 
 )
 
-target_include_directories(neuronc PRIVATE 
+target_include_directories(llnnic PRIVATE 
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_compile_options(neuronc PRIVATE 
+target_compile_options(llnnic PRIVATE 
     -Wall 
     -Wextra 
     -Wpedantic 
 )
 
-target_link_libraries(neuronc PRIVATE m)
+target_link_libraries(llnnic PRIVATE m) 
+
+
+target_link_libraries(llnnic PRIVATE pthread)
 
 
 # Testing
@@ -105,6 +109,7 @@ if(BUILD_TESTING)
         )
 
         target_link_libraries(${target} PRIVATE m)
+        target_link_libraries(${target} PRIVATE pthread)
 
         add_test(
             NAME ${test_name}_tests
