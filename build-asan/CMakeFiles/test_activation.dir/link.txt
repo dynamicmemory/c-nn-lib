@@ -1,0 +1,1 @@
+/usr/bin/cc -fsanitize=address,undefined -g -O1 -fno-omit-frame-pointer -fsanitize=address,undefined -Wl,--dependency-file=CMakeFiles/test_activation.dir/link.d CMakeFiles/test_activation.dir/test/test_activation.c.o CMakeFiles/test_activation.dir/src/activation.c.o -o test_activation  -lm

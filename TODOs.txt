@@ -1,6 +1,9 @@
+// TODO: Multithreaded solution to improve performance
+
 // TODO: Onehotencoding for labels... decide if always must and how to handle user
 // TODO: weight decay regularization param for a
+
 // TODO: Fix consts throughout the project
 // TODO: setup error code enum to propagate correct errors
 // TODO: Consider throwing a validation set into train with a NULL check if you dont want it
-// TODO: Multithreaded solution to improve performance
+

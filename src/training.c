@@ -280,7 +280,6 @@ void free_activations(network_t *nn) {
     layer_t *layer = nn->layers;
 
     for (size_t i=0; i<nn->layer_count; ++i) {
-        free(layer[i].a.data);
-        layer[i].a.data = NULL;
+        free_matrix(&layer[i].a);
     }
 }

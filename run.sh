@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-rm -rf build
-cmake -S . -B build
-cmake --build build
-./build/neuronc
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build --target neuronc
+
+exec ./build/neuronc "$@"
