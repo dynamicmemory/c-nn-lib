@@ -1,4 +1,4 @@
-#include "nn.h"
+#include "llnnic.h"
 #include "mnist.h"
 #include "dummy.h"
 
@@ -19,18 +19,10 @@ int main(void) {
     matrix_t x_test = load_mnist_images(test_images);
     matrix_t y_test = load_mnist_labels(test_labels);
     
-    // printf("x_train Shape: %zu x %zu\n", x_train.rows, x_train.cols);
-    // printf("y_train Shape: %zu x %zu\n", y_train.rows, y_train.cols);
-    // printf("First pixel: %f\n", x_train.data[0]);
-    //
-    // if (x_train.rows == y_train.rows) 
-    //     printf("x.rows == y.rows\n");
-
-    // mnist_print_sample(&x_train, &y_train, 1990);
     // Create a subset to test with 
-    int n = 60000;
-    int epochs = 200;
-    double lr = 0.4;
+    int n = 1000;
+    int epochs = 10;
+    double lr = 0.5;
 
     matrix_t x_small = {
         .rows = n,
@@ -56,7 +48,7 @@ int main(void) {
     int l1 = add_layer(&nn, 32, relu);
     int l2 = add_layer(&nn, y_small.cols, softmax);
     if (l1 < 0 || l2 < 0) {
-        cleanup(&nn);
+        network_cleanup(&nn);
         return 1;
     }
 
@@ -84,6 +76,6 @@ int main(void) {
     free(y_test.data);
     free(x_small.data);
     free(y_small.data);
-    cleanup(&nn);
+    network_cleanup(&nn);
     return 0;
 }

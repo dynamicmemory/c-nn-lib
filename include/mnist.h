@@ -1,7 +1,7 @@
 #ifndef MNIST_H
 #define MNIST_H 
 
-#include "nn.h"
+#include "matrix.h"
 #include <stddef.h>
 
 /*

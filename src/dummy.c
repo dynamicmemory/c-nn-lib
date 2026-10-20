@@ -1,4 +1,5 @@
 #include "dummy.h"
+#include "llnnic.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -86,7 +87,7 @@ void binary_test() {
             best = i;
     printf("For 2,1,1,2,3,1, network predicted: %d\n", preds.data[best] > 0.5 ? 1 : 0);
 
-    cleanup(&nn);
+    network_cleanup(&nn);
     free_matrix(&x);
     free_matrix(&y);
 }
@@ -120,7 +121,7 @@ void multiclass_test() {
     }
     printf("For 5,5,5,6,7,4 network predicted: %zu\n", best);
 
-    cleanup(&nn);
+    network_cleanup(&nn);
     free_matrix(&x);
     free_matrix(&y);
     printf("Script end\n");

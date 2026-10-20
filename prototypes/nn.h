@@ -145,11 +145,6 @@ typedef struct {
 
 } network_t;
 
-/* Prediction result — currently unused */
-// typedef struct {size_t class; double *probabilities;
-// } predict_t;
-
-
 /* 
  * Creates a new neural network object
  *
@@ -170,7 +165,7 @@ network_t neural_net(size_t features, double lr,
  * Params:
  *   nn: Network to clean up, NULL is ignored.
  */
-void cleanup(network_t *nn);
+void network_cleanup(network_t *nn);
 
 /*
  * Sets the networks random seed and reseeds the C standard libs process-wide 
@@ -413,9 +408,6 @@ void free_activations(network_t *nn);
  *   0 on success, or -1 on training failure
  */
 int train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbose);
-
-// void evaluate(network_t *nn, matrix_t x, matrix_t y);
-// void binary_evaluator(network_t *nn, matrix_t x, matrix_t y);
 
 /*
  * Generates predictions for a batch of input samples 1 - n, runs forward prop 

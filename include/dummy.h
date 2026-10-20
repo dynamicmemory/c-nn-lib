@@ -1,7 +1,7 @@
 #ifndef DUMMY_H 
 #define DUMMY_H
 
-#include "nn.h"
+#include "llnnic_types.h"
 
 void binary_test();
 void multiclass_test();

@@ -10,8 +10,14 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 
 add_executable(neuronc 
+    src/network.c 
+    src/activation.c 
+    src/evaluation.c 
+    src/matrix.c 
+    src/loss.c 
+    src/training.c 
+
     src/main.c 
-    src/nn.c 
     src/mnist.c 
     src/dummy.c 
 )
