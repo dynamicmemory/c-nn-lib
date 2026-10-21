@@ -20,9 +20,10 @@ int main(void) {
     matrix_t y_test = load_mnist_labels(test_labels);
     
     // Create a subset to test with 
-    int n = 1000;
-    int epochs = 10;
-    double lr = 0.5;
+    int n = 60000;
+    int epochs = 5000;
+    double lr = 0.2;
+    size_t threads = 12;
 
     matrix_t x_small = {
         .rows = n,
@@ -45,6 +46,9 @@ int main(void) {
     printf("Samples: %d\nEpochs: %d\nlr: %f\n", n, epochs, lr);
     network_t nn = neural_net(x_small.cols, lr, epochs, CATEGORICAL_CROSS_ENTROPY);
     set_seed(&nn, 69);
+
+    nn.threads = threads;
+
     int l1 = add_layer(&nn, 32, relu);
     int l2 = add_layer(&nn, y_small.cols, softmax);
     if (l1 < 0 || l2 < 0) {
@@ -54,7 +58,7 @@ int main(void) {
 
     train(&nn, x_small, y_small, 1e-8, 1);
 
-    printf("Samples: %d\nEpochs: %d\nlr: %f\n", n, epochs, lr);
+    printf("Samples: %d\nEpochs: %d\nlr: %fthreads: %zu\n", n, epochs, lr, threads);
 
     printf("Train set ");
     evaluate_t eval;
