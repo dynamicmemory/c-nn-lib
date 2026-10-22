@@ -1,6 +1,6 @@
 #define _GNU_SOURCE
 #include <pthread.h>
-#include "llnnic_internal.h"
+#include "nnlib_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>

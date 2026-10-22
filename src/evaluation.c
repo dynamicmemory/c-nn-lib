@@ -1,5 +1,5 @@
 #include "evaluation.h"
-#include "llnnic_internal.h"
+#include "nnlib_internal.h"
 
 #include "loss.h"
 #include "matrix.h"
@@ -46,7 +46,6 @@ static void confusion_matrix(matrix_t y, matrix_t preds, evaluate_t *eval);
 static void calculate_metrics(evaluate_t *eval, int binary);
 
 
-// TODO: Change return to a matrix_t object
 int predict(network_t *nn, matrix_t x, matrix_t *preds) {
     if (nn == NULL || preds == NULL) 
         return -1;

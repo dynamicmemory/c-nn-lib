@@ -1,7 +1,7 @@
 #ifndef TRAINING_H
 #define TRAINING_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /* 
  * Trains a model using the supplied input and target data.

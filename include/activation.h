@@ -1,7 +1,7 @@
 #ifndef ACTIVATION_H 
 #define ACTIVATION_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /* 
  * Applies the ReLu activation element-wise 

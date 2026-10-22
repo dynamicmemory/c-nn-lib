@@ -1,7 +1,7 @@
 #ifndef NETWORK_H 
 #define NETWORK_H
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /* 
  * Creates a new neural network object

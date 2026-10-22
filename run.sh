@@ -2,6 +2,6 @@
 set -euo pipefail
 
 cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --target llnnic 
+cmake --build build --target mnist 
 
-exec ./build/llnnic "$@"
+exec ./build/mnist "$@"

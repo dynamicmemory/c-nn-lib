@@ -8,7 +8,7 @@
 #include "matrix.h"
 #include "activation.h"
 #include "loss.h"
-#include "llnnic_internal.h"
+#include "nnlib_internal.h"
 
 #define EPSILON 1e-9
 

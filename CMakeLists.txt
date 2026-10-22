@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(llnnic)
+project(nn_lib)
+add_compile_definitions(_POSIX_C_SOURCE=199309L)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,7 +11,9 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
 
-add_executable(llnnic
+# Nerual Network library 
+
+add_library(nn_lib STATIC 
     src/network.c 
     src/activation.c 
     src/evaluation.c 
@@ -18,27 +21,39 @@ add_executable(llnnic
     src/loss.c 
     src/training.c 
     src/parallel_train.c
-
-    src/main.c 
-    src/mnist.c 
-    src/dummy.c 
 )
 
-target_include_directories(llnnic PRIVATE 
+target_include_directories(nn_lib PUBLIC 
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_compile_options(llnnic PRIVATE 
+target_compile_options(nn_lib PRIVATE 
     -Wall 
     -Wextra 
     -Wpedantic 
 )
 
-target_link_libraries(llnnic PRIVATE m) 
+target_link_libraries(nn_lib PUBLIC 
+    m
+    Threads::Threads 
+) 
 
+# MNIST Example 
 
-target_link_libraries(llnnic PRIVATE pthread)
+add_executable(mnist
+    examples/mnist/main.c 
+    examples/mnist/mnist.c 
+)
 
+target_compile_options(mnist PRIVATE 
+    -Wall 
+    -Wextra 
+    -Wpedantic 
+)
+
+target_link_libraries(mnist PRIVATE 
+    nn_lib
+)
 
 # Testing
 

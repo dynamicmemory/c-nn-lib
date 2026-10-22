@@ -1,7 +1,8 @@
 #ifndef MATRIX_H 
 #define MATRIX_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
+
 
 /*
  * Creates a rows by cols matrix populated with random values

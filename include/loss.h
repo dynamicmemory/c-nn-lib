@@ -1,7 +1,7 @@
 #ifndef LOSS_H 
 #define LOSS_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /* Built in loss function configurations*/
 extern const loss_t BINARY_CROSS_ENTROPY;

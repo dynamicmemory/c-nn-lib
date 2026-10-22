@@ -1,5 +1,5 @@
-#ifndef LLNNIC_TYPES_H
-#define LLNNIC_TYPES_H
+#ifndef NNLIB_TYPES_H
+#define NNLIB_TYPES_H
 
 #include <stddef.h>
 

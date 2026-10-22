@@ -1,7 +1,7 @@
-#ifndef LLNNIC_INTERNAL_H
-#define LLNNIC_INTERNAL_H
+#ifndef NNLIB_INTERNAL_H
+#define NNLIB_INTERNAL_H
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /* Internal training functions used by evaluation.c, parallel_train.c, and training.c */
 

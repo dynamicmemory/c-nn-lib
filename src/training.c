@@ -1,5 +1,5 @@
 #include "training.h"
-#include "llnnic_internal.h"
+#include "nnlib_internal.h"
 #include "matrix.h"
 
 #include <math.h>

@@ -1,7 +1,7 @@
-#ifndef LLNNIC_H
-#define LLNNIC_H 
+#ifndef NNLIB_H
+#define NNLIB_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 #include "matrix.h"
 #include "activation.h"
 #include "loss.h"

@@ -1,7 +1,7 @@
 #ifndef EVALUATION_H 
 #define EVALUATION_H 
 
-#include "llnnic_types.h"
+#include "nnlib_types.h"
 
 /*
  * Generates predictions for a batch of input samples 1 - n, runs forward prop 
@@ -10,7 +10,8 @@
  * Params:
  *   nn - network used to gen preds 
  *   x - input matrix, shaped (samples * features)
- *   preds - matrix where all predictions made are stored
+ *   preds - matrix where all predictions made are stored, must be created 
+ *           prior, passed in, and unassigned
  *
  * Returns: 
  *   0 on succes and -1 on failure
