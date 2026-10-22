@@ -17,6 +17,7 @@ add_executable(llnnic
     src/matrix.c 
     src/loss.c 
     src/training.c 
+    src/parallel_train.c
 
     src/main.c 
     src/mnist.c 
@@ -79,6 +80,7 @@ if(BUILD_TESTING)
     add_executable(test_training
         test/test_training.c
         src/training.c
+        src/parallel_train.c
         src/network.c
         src/matrix.c
         src/activation.c
@@ -89,6 +91,7 @@ if(BUILD_TESTING)
         test/test_evaluation.c
         src/evaluation.c
         src/training.c
+        src/parallel_train.c
         src/network.c
         src/matrix.c
         src/activation.c

@@ -20,8 +20,8 @@ int main(void) {
     matrix_t y_test = load_mnist_labels(test_labels);
     
     // Create a subset to test with 
-    int n = 60000;
-    int epochs = 5000;
+    int n = 600;
+    int epochs = 50;
     double lr = 0.2;
     size_t threads = 12;
 

@@ -4,7 +4,11 @@
 #include "llnnic_types.h"
 
 /* 
- * Trains a model using the supplied input and target data
+ * Trains a model using the supplied input and target data.
+ *
+ * Selects serial or parallel training according to the value in nn->threads. 
+ * A value greater than one will train on that many threads, otherwise training 
+ * will occur serially on a single thread.
  * 
  * Params: 
  *   nn - Network to train
