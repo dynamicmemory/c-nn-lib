@@ -1,3 +1,11 @@
+/* Example script for the neural net library. Showcases the basic functionality 
+ * of the library from setting up the network, adding n number of layers, 
+ * training, evaluating the results, and making a prediction. 
+ * 
+ * This script also showcases a few of the mnist functions included in the 
+ * example which can be used for testing or baselines for your own 
+ * implementations
+ */
 #include "nnlib.h"
 #include "mnist.h"
 
@@ -5,31 +13,18 @@
 #include <stdlib.h>
 #include <time.h>
 
-typedef struct {
-    int n_samples;
-    int epochs;
-    int threads;
-    double learning_rate;
-} args_t;
-
-int parse_args(int argc, char *argv[], args_t *args);
-double wtime(void);
+/* Creates a subset of data from a passed in matrix, purely for this example*/
 int create_subset(const matrix_t *src, matrix_t *dst, size_t n);
+
+/* Simple workflow for making a prediction and interpretting it purely for this 
+ * example only 
+ */
 int make_a_prediction(network_t *nn, matrix_t *x, matrix_t *y);
 
-int main(int argc, char *argv[]) {
-    double full_start = wtime();
+/* Used to time training*/
+double wtime(void);
 
-    // Check cmd line args, set defaults if none passed in
-    args_t args;
-    if (parse_args(argc, argv, &args) < 0) {
-        // args.n_samples = 60000;
-        // args.epochs = 100;
-        // args.learning_rate = 0.2;
-        // args.threads = 12;
-        return EXIT_FAILURE;
-    }
-    
+int main(void) {
     // Import the data
     char mnist_images[] = "./examples/mnist/data/train-images-idx3-ubyte";
     char mnist_labels[] = "./examples/mnist/data/train-labels-idx1-ubyte";
@@ -43,18 +38,24 @@ int main(int argc, char *argv[]) {
     
     size_t features = x_train.cols;
 
+    // Network variables 
+    int n_samples = 60000;
+    int epochs = 100;
+    int threads = 6;
+    double lr = 0.2;
+
     // Create a subset of data to train on (for testing different sized train sets)
     matrix_t x_subset, y_subset;
-    if (create_subset(&x_train, &x_subset, args.n_samples) < 0 || 
-        create_subset(&y_train, &y_subset, args.n_samples) < 0) {
+    if (create_subset(&x_train, &x_subset, n_samples) < 0 || 
+        create_subset(&y_train, &y_subset, n_samples) < 0) {
         fprintf(stderr, "Unable to create a training subset\n");
         return EXIT_FAILURE;
     }
 
-    // Setup model
-    network_t nn = neural_net(features, args.learning_rate, args.epochs, CATEGORICAL_CROSS_ENTROPY);
+    // Setup and build the network
+    network_t nn = neural_net(features, lr, epochs, CATEGORICAL_CROSS_ENTROPY);
     set_seed(&nn, 69);
-    nn.threads = args.threads;
+    nn.threads = threads;
 
     int l1 = add_layer(&nn, 32, relu);
     int l2 = add_layer(&nn, y_subset.cols, softmax);
@@ -63,16 +64,14 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Train 
+    // Train the model 
     printf("Samples: %d\nEpochs: %d\nlr: %f\nthreads: %d\n", 
-            args.n_samples, args.epochs, args.learning_rate, args.threads);
-    double train_start = wtime();
-    // train(&nn, x_subset, y_subset, 1e-8, 0);
-    train(&nn, x_subset, y_subset, 0.0, 0);
-    double train_end = wtime() - train_start;
-
-    printf("Samples: %d\nEpochs: %d\nlr: %f\nthreads: %d\n", 
-            args.n_samples, args.epochs, args.learning_rate, args.threads);
+            n_samples, epochs, lr, threads);
+    double start_clock = wtime();
+    train(&nn, x_subset, y_subset, 1e-8, 1);
+    double training_time = wtime() - start_clock;
+    printf("Samples: %d\nEpochs: %d\nlr: %f\nthreads: %d\nTraining Time: %f", 
+            n_samples, epochs, lr, threads, training_time);
 
     // Evaluate 
     printf("Train set ");
@@ -83,6 +82,7 @@ int main(int argc, char *argv[]) {
         free_evaluate(&eval);
         printf("\n");
     }
+
     printf("Test set ");
     if (evaluate(&nn, x_test, y_test, &eval, 0.5) == 0) {
         print_confusion_matrix(eval.confusion);
@@ -90,11 +90,6 @@ int main(int argc, char *argv[]) {
         free_evaluate(&eval);
         printf("\n");
     }
-
-    double full_end = wtime() - full_start;
-
-    printf("WORKFLOW_SECONDS=%.9f\n", full_end);
-    printf("TRAIN_SECONDS=%.9f\n", train_end);
 
     // Make a prediction
     make_a_prediction(&nn, &x_test, &y_test);
@@ -109,52 +104,6 @@ int main(int argc, char *argv[]) {
 
     network_cleanup(&nn);
     return EXIT_SUCCESS;
-}
-
-double wtime(void) { 
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
-}
-
-//TODO: extract out to parse_long() function
-int parse_args(int argc, char *argv[], args_t *args) {
-    if (argc != 5) {
-        fprintf(stderr, "usage: <n_samples> <epochs> <threads> <learning_rate>\n");
-        return -1;
-    } 
-
-    char *end;
-    long result = strtol(argv[1], &end, 10);
-    if (*end != '\0') { 
-        fprintf(stderr, "n_samples should be an integer between 1 and training max\n");
-        return -1;
-    }
-    args->n_samples = (int)result;
-
-    result = strtol(argv[2], &end, 10);
-    if (*end != '\0') { 
-        fprintf(stderr, "epochs should be an integer or long value\n");
-        return -1;
-    }
-    args->epochs = (int)result;
-
-    result = strtol(argv[3], &end, 10);
-    if (*end != '\0') { 
-        fprintf(stderr, "threads should be an integer between 1 and system max\n");
-        return -1;
-    }
-    args->threads = (int)result;
-
-    printf("%s\n", argv[4]);
-    double lr = strtof(argv[4], &end);
-    if (*end != '\0') { 
-        fprintf(stderr, "learning_rate should be an integer between 0 and 1\n");
-        return -1;
-    }
-    args->learning_rate = lr;
-
-    return 0;
 }
 
 int create_subset(const matrix_t *src, matrix_t *dst, size_t n) {
@@ -197,4 +146,10 @@ int make_a_prediction(network_t *nn, matrix_t *x, matrix_t *y) {
     free_matrix(&sample);
     free_matrix(&preds);
     return 0;
+}
+
+double wtime(void) { 
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
