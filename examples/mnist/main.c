@@ -39,9 +39,9 @@ int main(void) {
     size_t features = x_train.cols;
 
     // Network variables 
-    int n_samples = 60000;
+    int n_samples = 5000;
     int epochs = 100;
-    int threads = 6;
+    int threads = 1;
     double lr = 0.2;
 
     // Create a subset of data to train on (for testing different sized train sets)
@@ -70,8 +70,12 @@ int main(void) {
     double start_clock = wtime();
     train(&nn, x_subset, y_subset, 1e-8, 1);
     double training_time = wtime() - start_clock;
-    printf("Samples: %d\nEpochs: %d\nlr: %f\nthreads: %d\nTraining Time: %f", 
-            n_samples, epochs, lr, threads, training_time);
+    printf("Model trained on:\n");
+    printf("%-18s %d\n", "Samples:", n_samples);
+    printf("%-18s %d\n", "Epochs:", epochs);
+    printf("%-18s %.2f\n", "Learning Rate:", lr);
+    printf("%-18s %d\n", "Threads:", threads);
+    printf("%-18s %.2f\n\n", "Training Time (m):", training_time/60);
 
     // Evaluate 
     printf("Train set ");
@@ -125,7 +129,7 @@ int create_subset(const matrix_t *src, matrix_t *dst, size_t n) {
 }
 
 int make_a_prediction(network_t *nn, matrix_t *x, matrix_t *y) {
-
+    printf("Prediction from Test set\n");
     matrix_t sample, preds;
     if(create_subset(x, &sample, 1) < 0) {
         fprintf(stderr, "Unable to create preds set\n");
@@ -133,15 +137,17 @@ int make_a_prediction(network_t *nn, matrix_t *x, matrix_t *y) {
     }
     predict(nn, sample, &preds);
     int predicted = 0;
-    printf("Models class probabilities: \n");
+    mnist_print_sample(&sample, y, 0);
+
+    printf("\nModels class probabilities: \n");
     for (size_t col=0; col<nn->output_classes; ++col) {
         printf("Class: %zu - Probability: %f\n", col, preds.data[col]);
         if (preds.data[col] > preds.data[predicted])
             predicted = col;
     }
 
-    mnist_print_sample(&sample, y, 0);
-    printf("The model predicted: %d\n", predicted);
+
+    printf("\nThe model predicted: %d\n", predicted);
 
     free_matrix(&sample);
     free_matrix(&preds);
