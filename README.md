@@ -33,7 +33,7 @@ inspect predictions, and evaluate performance.
 ## Project structure
 
 ```bash
-nn_lib/
+nnlib/
 ├── include/
 │   ├── nnlib.h
 │   ├── nnlib_types.h
@@ -58,6 +58,10 @@ nn_lib/
 │       ├── mnist.c
 │       ├── mnist.h
 │       └── data/
+├── docs/
+│   ├── API.md
+│   ├── nnlib-benchmark-report.pdf
+│   ├── LICENSE 
 ├── test/
 ├── CMakeLists.txt
 ├── rebuild.sh
@@ -78,6 +82,8 @@ data structures shared by the API.
 The project uses CMake and links against libm and the platform's thread library.
 
 ## Build
+
+Clone the project into a directory of your choosing
 
 From the project root:
 
@@ -237,8 +243,8 @@ Serial training is the default. Parallel training partitions the training
 samples across workers, computes local gradients, reduces them into full-batch
 gradients, and updates the shared model parameters.
 
-Parallel training can significantly speed up your network training by a factor 5, 
-you can read more about it at docs/nnlib-benchmark-report.md.
+Parallel training can significantly speed up your network training which has been,
+demonstrated with solid results, you can read more about it at docs/nnlib-benchmark-report.pdf.
 
 ## Loss functions and activations
 

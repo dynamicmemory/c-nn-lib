@@ -1,3 +1,5 @@
+// TODO: Add robust error checking for all pthread functions 
+
 #define _GNU_SOURCE
 #include <pthread.h>
 #include "nnlib_internal.h"
@@ -66,8 +68,6 @@ struct thread_args_t {
     shared_args_t *shared;
     double local_loss;
 };
-
-
 
 /*
  * Executes the parallel training loop for a single worker thread, this is the 
@@ -182,8 +182,10 @@ int parallel_train(network_t *nn, matrix_t x, matrix_t y, double tol, int verbos
     }
 
     for (size_t i=0; i<thread_count; ++i)
+        //TODO: Add error checking 
         pthread_create(&tid[i], NULL, worker, &thread_args[i]);
     for (size_t i=0; i<thread_count; ++i)
+        //TODO: Add error checking 
         pthread_join(tid[i], NULL);
 
     return 0;
@@ -208,6 +210,7 @@ static void *worker(void *args) {
         if (backprop(nn, targs->x, targs->y) < 0) 
             return NULL;
 
+        //TODO: Add error checking 
         pthread_barrier_wait(shared->barrier);
 
         if (targs->id == 0) {
@@ -234,6 +237,7 @@ static void *worker(void *args) {
                 printf("Epoch: %zu | Loss: %f\n", epoch, loss);
         }
 
+        //TODO: Add error checking 
         pthread_barrier_wait(shared->barrier);
         if (shared->stop)
             break;
