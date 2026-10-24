@@ -1,8 +1,8 @@
-# nn_lib (working title)
+# nnlib (working title)
 
 A neural network library written from scratch in C.
 
-nn_lib implements a configurable feedforward neural network with backpropagation, 
+nnlib is a configurable feedforward neural network with backpropagation, 
 gradient-based training, evaluation metrics, and multithreaded training. 
 It is designed to make the underlying mechanics explicit: network layers, 
 weight matrices, activation functions, loss functions, gradients, and parameter 
@@ -15,28 +15,18 @@ on handwritten digit images.
 
 - Configurable network architecture — construct networks dynamically by adding 
 layers with different neuron counts and activation functions.
-
 - Implemented from scratch in C — explicit forward propagation, backpropagation, 
 gradient calculation, and parameter updates.
-
-- Activation functions — ReLU, sigmoid, and softmax.
-
-- Loss functions — binary cross-entropy and categorical cross-entropy.
-
+- Activation functions (currently supported) — ReLU, sigmoid, and softmax.
+- Loss functions (currently supported) — binary cross-entropy and categorical cross-entropy.
 - Training — full-batch gradient descent with configurable learning rate, 
 epoch count, and optional loss-change-based early stopping.
-
 - Parallel training — a data-parallel implementation using POSIX threads.
-
 - Evaluation — loss, accuracy, precision, recall, F1 score, and confusion matrices.
-
 - Prediction — obtain model outputs for new samples.
-
 - Memory management — explicit allocation and cleanup through C functions.
-
 - Testing — separate CTest targets for matrices, activations, losses, networks,
 training, and evaluation.
-
 - MNIST example — load handwritten digit data, train a classifier, 
 inspect predictions, and evaluate performance.
 
@@ -81,11 +71,8 @@ data structures shared by the API.
 ## Requirements
 
 - A C compiler supporting C11.
-
 - CMake 3.16 or later.
-
 - POSIX threads.
-
 - The standard math library.
 
 The project uses CMake and links against libm and the platform's thread library.
@@ -186,17 +173,11 @@ int main(void) {
 This example demonstrates the intended workflow:
 
 1. Create a network with neural_net().
-
 2. Optionally configure the random seed.
-
 3. Add layers using add_layer().
-
 4. Prepare input and target matrices.
-
 5. Train using train().
-
 6. Evaluate using evaluate().
-
 7. Release evaluation results, data matrices, and network resources.
 
 See docs/API.md for the complete API reference and data-format requirements.
@@ -235,15 +216,10 @@ activations from the corresponding input row.
 Training uses full-batch gradient descent:
 
 1. Run a forward pass through each layer.
-
 2. Calculate the loss from the output layer.
-
 3. Backpropagate gradients through the network.
-
 4. Average the weight and bias gradients over the training samples.
-
 5. Update the weights and biases using the configured learning rate.
-
 6. Optionally stop when the absolute change between successive epoch losses falls
 below the specified tolerance.
 
@@ -328,17 +304,12 @@ The API uses explicit C memory management.
 
 - neural_net() returns a network value that owns dynamically allocated layer 
 storage as layers are added.
-
 - network_cleanup() releases the network's layer matrices and layer array.
-
 - zeros_matrix() and random_matrix() return matrices whose allocated data must 
 be released using free_matrix().
-
 - predict() allocates the output matrix; the caller releases it using free_matrix().
-
 - evaluate() allocates the confusion matrix in its result; the caller releases 
 it using free_evaluate().
-
 - Input and target matrices supplied to training, prediction, and evaluation
 remain caller-owned.
 
@@ -354,21 +325,14 @@ not a complete machine-learning framework.
 Current limitations include:
 
 - Full-batch training only; no minibatch training or shuffling.
-
 - No automatic validation of all matrix dimensions, target values, or 
 activation/loss combinations.
-
 - No GPU support.
-
 - No convolutional or recurrent layers.
-
 - No model serialization or checkpointing API. (coming soon)
-
 - The random seed uses the C standard library's process-wide random-number generator.
-
 - Parallel training still needs more robust handling of worker creation failures,
 worker errors, and resource cleanup.
-
 - Some allocation and invalid-input failure paths require additional hardening.
 
 The implementation was intended as a learning exercise and grew into a transparent 
@@ -378,4 +342,4 @@ fun to build.
 
 ## License
 
-This project is licensed under the MIT Liscense. See the [LICENSE](docs/LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](docs/LICENSE) file for details.
